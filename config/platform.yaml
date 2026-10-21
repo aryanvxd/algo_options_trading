@@ -1,0 +1,43 @@
+# Platform-wide settings shared by every algo.
+# Relative paths are resolved against the project root.
+
+db_url: sqlite:///data/db/platform.db
+data_dir: data
+logs_dir: logs
+log_level: INFO
+dashboard_port: 8050
+
+kite:
+  # Set the same redirect URL in your Kite developer console:
+  #   http://127.0.0.1:5005/kite/callback
+  redirect_host: 127.0.0.1
+  redirect_port: 5005
+  redirect_path: /kite/callback
+  min_request_interval_s: 0.35   # simple client-side throttle between REST calls
+  max_retries: 3
+
+# Zerodha F&O options charges. These change — check the Zerodha brokerage
+# calculator and update before trusting net P&L numbers.
+charges:
+  brokerage_per_order: 20.0      # flat per executed order
+  stt_sell_rate: 0.0015          # on sell-side premium (0.15% after Budget 2026; verify)
+  exchange_txn_rate: 0.0003503   # NSE options, on premium
+  sebi_rate: 0.000001            # ₹10 per crore
+  stamp_buy_rate: 0.00003        # on buy-side premium
+  gst_rate: 0.18                 # on brokerage + exchange txn + SEBI fee
+
+paper:
+  slippage_pts: 0.5              # added against you on every paper fill
+  max_spread_pts: 5.0            # wider than this = order rejected (unless it is a forced exit)
+  tick_size: 0.05
+
+instruments:
+  nfo_underlyings: [NIFTY]       # option chains stored daily (keep this list small)
+  keep_days: 30                  # older instrument snapshots are pruned
+
+runtime:
+  loop_interval_s: 1.0
+  live_state_interval_s: 1.0
+  position_snapshot_interval_s: 5.0
+  tick_snapshot_interval_s: 5.0
+  control_poll_interval_s: 1.0

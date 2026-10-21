@@ -1,0 +1,56 @@
+# NIFTY 50 constituents used for pre-open gainers/losers and advance/decline.
+# NSE reshuffles the index twice a year — update this list when it changes.
+# Symbols Kite does not recognise are simply ignored (and logged).
+name: nifty50
+exchange: NSE
+symbols:
+  - ADANIENT
+  - ADANIPORTS
+  - APOLLOHOSP
+  - ASIANPAINT
+  - AXISBANK
+  - BAJAJ-AUTO
+  - BAJFINANCE
+  - BAJAJFINSV
+  - BEL
+  - BHARTIARTL
+  - CIPLA
+  - COALINDIA
+  - DRREDDY
+  - EICHERMOT
+  - ETERNAL
+  - GRASIM
+  - HCLTECH
+  - HDFCBANK
+  - HDFCLIFE
+  - HINDALCO
+  - HINDUNILVR
+  - ICICIBANK
+  - INDIGO
+  - INFY
+  - ITC
+  - JIOFIN
+  - JSWSTEEL
+  - KOTAKBANK
+  - LT
+  - M&M
+  - MARUTI
+  - MAXHEALTH
+  - NESTLEIND
+  - NTPC
+  - ONGC
+  - POWERGRID
+  - RELIANCE
+  - SBILIFE
+  - SBIN
+  - SHRIRAMFIN
+  - SUNPHARMA
+  - TATACONSUM
+  - TMPV
+  - TATASTEEL
+  - TCS
+  - TECHM
+  - TITAN
+  - TRENT
+  - ULTRACEMCO
+  - WIPRO
