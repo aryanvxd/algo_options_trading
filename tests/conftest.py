@@ -9,7 +9,8 @@ from trading_core.db.engine import Database
 @pytest.fixture
 def platform(tmp_path) -> PlatformConfig:
     return PlatformConfig(root=project_root(), db_url=f"sqlite:///{(tmp_path / 'test.db').as_posix()}",
-                          data_dir=tmp_path / "data", logs_dir=tmp_path / "logs")
+                          data_dir=tmp_path / "data", logs_dir=tmp_path / "logs",
+                          marketdata={"dir": tmp_path / "market"})
 
 
 @pytest.fixture

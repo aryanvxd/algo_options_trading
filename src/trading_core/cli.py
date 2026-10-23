@@ -9,6 +9,13 @@
   algo run --algo iron_condor --replay 2026-10-23    replay a recorded day
   algo kill --algo iron_condor         ask a running algo to square off and stop
   algo report --algo iron_condor       recent daily summaries
+  algo dashboard                       local web dashboard on http://127.0.0.1:8050
+  algo data status                     what is in the Parquet market-data store
+  algo data index --from 2021-01-01    NIFTY 50 + India VIX 1-min history from Kite
+  algo data constituents --from ...    NIFTY 50 constituents daily bars from Kite (breadth filter)
+  algo data bhavcopy --from 2021-01-01 NSE end-of-day option chains (free) with IV/greeks
+  algo data export-recorder            move recorded live ticks to Parquet (runs after each session)
+  algo data query "select ..."         run SQL over the store with DuckDB
 """
 
 from __future__ import annotations
@@ -119,6 +126,104 @@ def cmd_report(args: argparse.Namespace, platform: PlatformConfig) -> int:
     return 0
 
 
+def cmd_dashboard(args: argparse.Namespace, platform: PlatformConfig) -> int:
+    import uvicorn
+
+    from dashboard.app import create_app
+
+    port = args.port or platform.dashboard_port
+    url = f"http://127.0.0.1:{port}"
+    print(f"Dashboard on {url}  (Ctrl+C to stop)")
+    if not args.no_browser:
+        import threading
+        import webbrowser
+
+        threading.Timer(1.0, webbrowser.open, [url]).start()
+    # Bound to localhost only: the dashboard has no login.
+    uvicorn.run(create_app(_db(platform)), host="127.0.0.1", port=port, log_level="warning")
+    return 0
+
+
+def cmd_data(args: argparse.Namespace, platform: PlatformConfig) -> int:
+    from trading_core.marketdata.manifest import Manifest
+    from trading_core.marketdata.store import MarketStore
+
+    db = _db(platform)
+    store = MarketStore(platform.marketdata.dir)
+    manifest = Manifest(db)
+    md = platform.marketdata
+    today = LiveClock().today()
+    start = date.fromisoformat(args.start) if getattr(args, "start", None) else None
+    end = date.fromisoformat(args.end) if getattr(args, "end", None) else today
+
+    if args.action == "status":
+        rows = manifest.summary()
+        if not rows:
+            print(f"Store is empty ({md.dir}).")
+            return 0
+        print(f"{'dataset':<15}{'key':<12}{'source':<10}{'first':<12}{'last':<12}{'days':>6}{'rows':>12}{'bad':>5}")
+        for r in rows:
+            print(f"{r['dataset']:<15}{r['key']:<12}{r['source']:<10}{str(r['first']):<12}{str(r['last']):<12}"
+                  f"{r['days']:>6}{r['rows']:>12,}{r['problems']:>5}")
+        return 0
+
+    if args.action == "export-recorder":
+        from trading_core.marketdata.sources.recorder import export_day, prune_sqlite_ticks
+
+        day = date.fromisoformat(args.date) if args.date else today
+        print(f"{day}: {export_day(db, store, manifest, day)}")
+        if args.prune:
+            print(f"pruned {prune_sqlite_ticks(db, manifest, today, md.sqlite_tick_keep_days)} old tick rows")
+        return 0
+
+    if args.action == "bhavcopy":
+        from trading_core.marketdata.sources.nse_bhavcopy import NseBhavcopy
+
+        if start is None:
+            raise ValueError("--from is required")
+        nse = NseBhavcopy(store, manifest, md.underlyings, md.risk_free_rate, md.nse_request_interval_s,
+                          progress=print)
+        print(nse.download(start, end, force=args.force))
+        return 0
+
+    if args.action in ("index", "constituents"):
+        from trading_core.config import load_universe
+        from trading_core.kite.client import KiteClient
+        from trading_core.marketdata.sources.kite_index import KiteHistory
+
+        if start is None:
+            raise ValueError("--from is required")
+        client = KiteClient.from_db(db, platform.kite, load_secrets(platform.root), LiveClock())
+        kh = KiteHistory(client, store, manifest, progress=print)
+        if args.action == "index":
+            for sym in ([args.symbol] if args.symbol else md.index_symbols):
+                print(sym, kh.index_1m(sym, start, end, force=args.force))
+        else:
+            symbols = [k.split(":", 1)[1] for k in load_universe(platform, args.universe)]
+            print(kh.equity_daily(args.universe, symbols, start, end))
+        return 0
+
+    if args.action == "query":
+        from trading_core.marketdata.duck import MarketDB
+
+        table = MarketDB(store).sql(args.sql)
+        shown = table.slice(0, args.limit).to_pylist()
+        cols = table.column_names
+        width = {c: max([len(c)] + [len(_cell(r[c])) for r in shown]) for c in cols}
+        print("  ".join(c.ljust(width[c]) for c in cols))
+        for r in shown:
+            print("  ".join(_cell(r[c]).ljust(width[c]) for c in cols))
+        print(f"({table.num_rows} rows{', showing ' + str(len(shown)) if len(shown) < table.num_rows else ''})")
+        return 0
+    return 1
+
+
+def _cell(v) -> str:
+    if isinstance(v, float):
+        return f"{v:.4g}" if abs(v) < 1e-2 and v != 0 else f"{v:.2f}"
+    return "" if v is None else str(v)
+
+
 def _f(v: float | None) -> str:
     return "-" if v is None else f"{v:.2f}"
 
@@ -155,6 +260,33 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument("--algo", required=True)
     rp.add_argument("--limit", type=int, default=20)
     rp.set_defaults(fn=cmd_report)
+
+    db_ = sub.add_parser("dashboard", help="local web dashboard")
+    db_.add_argument("--port", type=int, default=None)
+    db_.add_argument("--no-browser", action="store_true")
+    db_.set_defaults(fn=cmd_dashboard)
+
+    dt = sub.add_parser("data", help="historical market data store (Parquet + DuckDB)")
+    dsub = dt.add_subparsers(dest="action", required=True)
+    dsub.add_parser("status", help="coverage of the store")
+    for name, hlp in (("index", "NIFTY 50 / India VIX 1-min from Kite"),
+                      ("constituents", "index constituents daily bars from Kite"),
+                      ("bhavcopy", "NSE end-of-day option chains")):
+        a = dsub.add_parser(name, help=hlp)
+        a.add_argument("--from", dest="start", required=True, metavar="YYYY-MM-DD")
+        a.add_argument("--to", dest="end", metavar="YYYY-MM-DD", help="default: today")
+        a.add_argument("--force", action="store_true", help="re-download days already stored")
+        if name == "index":
+            a.add_argument("--symbol", help='one index, e.g. "NIFTY 50" (default: all in config)')
+        if name == "constituents":
+            a.add_argument("--universe", default="nifty50")
+    ex = dsub.add_parser("export-recorder", help="move recorded live ticks to Parquet")
+    ex.add_argument("--date", metavar="YYYY-MM-DD", help="default: today")
+    ex.add_argument("--prune", action="store_true", help="also delete exported ticks older than the keep window")
+    q = dsub.add_parser("query", help="SQL over the store (views: index_1m, options_eod, options_1m, ...)")
+    q.add_argument("sql")
+    q.add_argument("--limit", type=int, default=30)
+    dt.set_defaults(fn=cmd_data)
     return p
 
 

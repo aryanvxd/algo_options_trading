@@ -17,6 +17,10 @@ cp .env.example .env              # fill KITE_API_KEY / KITE_API_SECRET (paid Ki
 
 In the Kite developer console set the redirect URL to `http://127.0.0.1:5005/kite/callback`.
 
+If Windows blocks `.venv\Scripts\algo.exe` ("An Application Control policy has blocked this
+file"), use the wrapper in the repo root instead: `.\algo.cmd <command>` (or
+`.venv\Scripts\python -m trading_core <command>`). The examples below work with either.
+
 ## Every trading day
 
 ```bash
@@ -37,6 +41,37 @@ day can later be replayed:
 
 If the process crashes mid-trade, run the same command again: it resumes today's run and
 picks up the open position from the database.
+
+## Dashboard
+
+```bash
+.venv/Scripts/algo dashboard                     # http://127.0.0.1:8050, opens your browser
+```
+
+Read-only view of the same database, so it can run alongside the algos or be closed at any
+time. The Overview page shows the day's P&L grouped by strategy (paper / live, real sessions or
+replays), intraday P&L, the last 30 days and a per-strategy scorecard; today's view refreshes
+every 5 seconds. Frontend is plain HTML/CSS/JS in `src/dashboard/static/` (no build step;
+Chart.js and Font Awesome are vendored so it works offline).
+
+## Historical market data
+
+Kept in Parquet files under `data/market/` (queried with DuckDB), separate from the trading DB.
+Design and source comparison: `docs/design/historical-data-and-backtests.md`.
+
+```bash
+algo data bhavcopy --from 2021-01-01             # NSE end-of-day option chains, free; IV/greeks computed
+algo data index --from 2021-01-01                # NIFTY 50 + India VIX 1-min from Kite (needs algo login)
+algo data constituents --from 2021-01-01         # NIFTY 50 stocks, daily, for the breadth filter
+algo data status                                 # what is stored, first/last day, problems
+algo data query "select * from options_eod where trade_date = '2026-10-22' limit 5"
+```
+
+Downloads resume where they stopped (each day is recorded in `market_data_files`; holidays
+are recorded as EMPTY). After each live session the day's recorded ticks are exported to
+`options_ticks` / `index_ticks` automatically, and SQLite keeps only the last 7 days of ticks;
+replays of older days read the Parquet copy. 1-minute history of *expired* options needs a
+vendor (Groww or Upstox) — not built yet.
 
 ## Layout
 

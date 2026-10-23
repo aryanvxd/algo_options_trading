@@ -316,3 +316,28 @@ class DailySummary(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (Index("ix_summary_algo_date", "algo_id", "trade_date"),)
+
+
+# ---------------------------------------------------------------- market data (Parquet store manifest)
+
+class MarketDataFile(Base):
+    """One row per Parquet file in data/market: what was downloaded/exported, from where, and whether
+    it checked out. Makes downloads resumable and lets the dashboard show coverage."""
+    __tablename__ = "market_data_files"
+    dataset: Mapped[str] = mapped_column(String(30), primary_key=True)        # options_1m, index_1m, ...
+    partition_key: Mapped[str] = mapped_column(String(40), primary_key=True)  # underlying or symbol
+    trade_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)         # kite, nse, recorder, groww ...
+    path: Mapped[str] = mapped_column(Text)
+    rows: Mapped[int] = mapped_column(Integer)
+    contracts: Mapped[int | None] = mapped_column(Integer)
+    first_ts: Mapped[datetime | None]
+    last_ts: Mapped[datetime | None]
+    sha256: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(10))                           # OK PARTIAL FAILED EMPTY
+    validated_against: Mapped[str | None] = mapped_column(String(30))
+    max_close_diff: Mapped[float | None] = mapped_column(Float)
+    note: Mapped[str | None] = mapped_column(Text)
+    written_at: Mapped[datetime]
+
+    __table_args__ = (Index("ix_mdf_dataset_date", "dataset", "trade_date"),)

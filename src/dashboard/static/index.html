@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Algo Desk</title>
+  <!-- Everything is served locally (no CDNs) so the dashboard works offline. -->
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/vendor/chartjs/chart.umd.min.js"></script>
+</head>
+<body>
+
+<aside id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-inner">
+      <div class="sidebar-brand">
+        <div class="app-name">Algo Desk</div>
+        <div class="app-sub">Kite · NSE F&amp;O</div>
+      </div>
+      <button class="sidebar-toggle" id="sidebar-toggle" title="Collapse sidebar" aria-label="Collapse sidebar">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav" aria-label="Main">
+    <button class="nav-btn" data-page="overview" data-tooltip="Overview">
+      <i class="fa-solid fa-gauge-high"></i><span class="nav-label">Overview</span>
+    </button>
+
+    <div class="nav-section">Trading</div>
+    <button class="nav-btn" disabled data-tooltip="Live monitor (soon)">
+      <i class="fa-solid fa-tower-broadcast"></i><span class="nav-label">Live monitor</span><span class="nav-soon">Soon</span>
+    </button>
+    <button class="nav-btn" disabled data-tooltip="Trade journal (soon)">
+      <i class="fa-solid fa-book"></i><span class="nav-label">Trade journal</span><span class="nav-soon">Soon</span>
+    </button>
+
+    <div class="nav-section">Research</div>
+    <button class="nav-btn" disabled data-tooltip="Backtests (soon)">
+      <i class="fa-solid fa-flask"></i><span class="nav-label">Backtests</span><span class="nav-soon">Soon</span>
+    </button>
+    <button class="nav-btn" disabled data-tooltip="Market data (soon)">
+      <i class="fa-solid fa-database"></i><span class="nav-label">Market data</span><span class="nav-soon">Soon</span>
+    </button>
+
+    <div class="nav-section">System</div>
+    <button class="nav-btn" disabled data-tooltip="Settings (soon)">
+      <i class="fa-solid fa-sliders"></i><span class="nav-label">Settings</span><span class="nav-soon">Soon</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-footer" title="Dashboard server connection">
+    <span class="conn-dot" id="conn-dot"></span>
+    <span class="footer-text"><span class="footer-app-name">Algo Desk</span> <span id="app-version">v—</span></span>
+  </div>
+</aside>
+
+<main id="main-content">
+  <div id="page"></div>
+</main>
+
+<div id="toast-container" aria-live="polite"></div>
+
+<script src="/static/app.js"></script>
+<script src="/static/pages/overview.js"></script>
+<script>App.start();</script>
+</body>
+</html>

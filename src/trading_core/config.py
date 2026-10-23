@@ -62,6 +62,15 @@ class RuntimeConfig(BaseModel):
     control_poll_interval_s: float = 1.0
 
 
+class MarketDataConfig(BaseModel):
+    dir: Path = Path("data/market")
+    index_symbols: list[str] = Field(default_factory=lambda: ["NIFTY 50", "INDIA VIX"])
+    underlyings: list[str] = Field(default_factory=lambda: ["NIFTY"])
+    risk_free_rate: float = 0.065          # for Black-76 IV/greeks; ~91-day T-bill yield
+    sqlite_tick_keep_days: int = 7         # recorded ticks stay in SQLite this long after export
+    nse_request_interval_s: float = 1.0    # politeness delay between NSE archive downloads
+
+
 class PlatformConfig(BaseModel):
     root: Path = Field(default_factory=project_root)
     db_url: str = "sqlite:///data/db/platform.db"
@@ -74,10 +83,12 @@ class PlatformConfig(BaseModel):
     paper: PaperConfig = Field(default_factory=PaperConfig)
     instruments: InstrumentsConfig = Field(default_factory=InstrumentsConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    marketdata: MarketDataConfig = Field(default_factory=MarketDataConfig)
 
     def model_post_init(self, __context: Any) -> None:
         self.data_dir = self._abs(self.data_dir)
         self.logs_dir = self._abs(self.logs_dir)
+        self.marketdata.dir = self._abs(self.marketdata.dir)
         prefix = "sqlite:///"
         if self.db_url.startswith(prefix) and not self.db_url.startswith(prefix + ":memory:"):
             db_path = Path(self.db_url[len(prefix):])

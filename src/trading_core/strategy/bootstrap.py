@@ -52,8 +52,9 @@ def run_algo(platform: PlatformConfig, db: Database, algo_id: str, *, mode: str 
     kite = None
     if replay_date:
         from trading_core.feed.replay_feed import ReplayFeed
+        from trading_core.marketdata.store import MarketStore
 
-        feed = ReplayFeed(db, trade_date, clock)
+        feed = ReplayFeed(db, trade_date, clock, store=MarketStore(platform.marketdata.dir))
         premarket_source = StoredPremarketSource(journal, trade_date)
     else:
         from trading_core.feed.live_feed import LiveFeed
@@ -84,4 +85,21 @@ def run_algo(platform: PlatformConfig, db: Database, algo_id: str, *, mode: str 
     if resumed:
         algo.restore(journal.positions_for_run(run_id))
     Runner(algo).run()
+    if source == "live":
+        export_recorded_day(platform, db, trade_date, clock.today())
     return run_id
+
+
+def export_recorded_day(platform: PlatformConfig, db: Database, day: date, today: date) -> None:
+    """Move the day's recorded ticks to Parquet and prune old ones from SQLite. Never fatal."""
+    from trading_core.marketdata.manifest import Manifest
+    from trading_core.marketdata.sources.recorder import export_day, prune_sqlite_ticks
+    from trading_core.marketdata.store import MarketStore
+
+    try:
+        manifest = Manifest(db)
+        stats = export_day(db, MarketStore(platform.marketdata.dir), manifest, day)
+        pruned = prune_sqlite_ticks(db, manifest, today, platform.marketdata.sqlite_tick_keep_days)
+        log.info("recorder export %s: %s; pruned %d old tick rows from SQLite", day, stats, pruned)
+    except Exception:  # noqa: BLE001 - the trading day is already done; don't fail on housekeeping
+        log.exception("recorder export failed for %s (run `algo data export-recorder` later)", day)

@@ -41,3 +41,12 @@ runtime:
   position_snapshot_interval_s: 5.0
   tick_snapshot_interval_s: 5.0
   control_poll_interval_s: 1.0
+
+# Historical market data store (Parquet files read with DuckDB), separate from the trading DB.
+marketdata:
+  dir: data/market
+  index_symbols: ["NIFTY 50", "INDIA VIX"]   # 1-min history pulled from Kite
+  underlyings: [NIFTY]                       # option chains kept from NSE bhavcopy / vendors
+  risk_free_rate: 0.065                      # Black-76 IV/greeks; roughly the 91-day T-bill yield
+  sqlite_tick_keep_days: 7                   # recorded ticks are kept in SQLite this long after export
+  nse_request_interval_s: 1.0                # be polite to NSE's archive server

@@ -67,5 +67,10 @@ class KiteClient:
     def instruments(self, exchange: str) -> list[dict[str, Any]]:
         return self._call(self.kite.instruments, exchange)
 
+    def historical(self, token: int, start: Any, end: Any, interval: str, oi: bool = False) -> list[dict[str, Any]]:
+        """Candles for a live instrument (Kite has no expired options). Max range per call:
+        60 days for minute candles, 2000 days for daily."""
+        return self._call(self.kite.historical_data, token, start, end, interval, False, oi) or []
+
     def margins(self) -> dict[str, Any]:
         return self._call(self.kite.margins)

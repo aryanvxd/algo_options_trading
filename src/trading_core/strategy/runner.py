@@ -113,6 +113,11 @@ class Runner:
         if ctx.instruments.has_snapshot(ctx.trade_date):
             return
         if ctx.is_replay:
+            from trading_core.marketdata.sources.recorder import restore_instruments
+            from trading_core.marketdata.store import MarketStore
+
+            if restore_instruments(MarketStore(ctx.platform.marketdata.dir), ctx.instruments, ctx.trade_date):
+                return
             raise SkipDay(f"no instrument snapshot stored for {ctx.trade_date}")
         ctx.instruments.refresh_from_kite(ctx.kite, ctx.trade_date)
 
