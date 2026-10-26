@@ -18,9 +18,9 @@ LOT_SIZE = 65
 
 
 def tick(token: int, ltp: float | None = None, bid: float | None = None, ask: float | None = None,
-         when: datetime | None = None) -> Tick:
+         when: datetime | None = None, oi: int | None = None) -> Tick:
     when = when or datetime(2026, 10, 23, 9, 20, tzinfo=IST)
-    return Tick(instrument_token=token, ltp=ltp, bid=bid, ask=ask, ts=when, received_at=when)
+    return Tick(instrument_token=token, ltp=ltp, bid=bid, ask=ask, ts=when, received_at=when, oi=oi)
 
 
 class FakeFeed(MarketFeed):
@@ -75,18 +75,22 @@ def instrument_rows(expiry: date, lo: int = 23500, hi: int = 26500, step: int = 
     return rows
 
 
-def option_price(opt: str, strike: float, spot: float, decay: float) -> float:
+def option_price(opt: str, strike: float, spot: float, decay: float, ce_skew: float = 1.0) -> float:
+    """Symmetric toy pricing: a CE and a PE the same distance from spot cost the same, unless
+    ``ce_skew`` scales the calls' time value (``ce_skew`` 2 = calls twice as dear)."""
     intrinsic = max(0.0, spot - strike) if opt == "CE" else max(0.0, strike - spot)
-    extrinsic = 60.0 * math.exp(-abs(strike - spot) / 150.0) * decay
+    extrinsic = 60.0 * math.exp(-abs(strike - spot) / 150.0) * decay * (ce_skew if opt == "CE" else 1.0)
     return round(max(0.05, intrinsic + extrinsic) * 20) / 20
 
 
 def seed_day(db, platform, trade_date: date, expiry: date, *, spot: Callable[[float], float],
              decay: Callable[[float], float], vix: float = 14.0, gap_pct: float = 0.1,
-             interval_s: int = 15, strikes: tuple[int, int] = (24300, 25700)) -> None:
+             interval_s: int = 15, strikes: tuple[int, int] = (24300, 25700), ce_skew: float = 1.0,
+             oi: tuple[int, int] = (1000, 1200)) -> None:
     """Store what a live recording run would have stored: instruments, pre-open breadth, ticks.
 
-    ``spot`` and ``decay`` take the fraction of the session elapsed (0 at 09:15, 1 at 15:30)."""
+    ``spot`` and ``decay`` take the fraction of the session elapsed (0 at 09:15, 1 at 15:30).
+    ``oi`` is the (CE, PE) open interest put on every option tick, so PCR = PE / CE."""
     journal = Journal(db)
     InstrumentStore(db, platform.instruments).save_snapshot(trade_date, instrument_rows(expiry))
     journal.register_algo("recorder", "recorder", "0", "", ist(trade_date, time(8, 0)))
@@ -106,9 +110,9 @@ def seed_day(db, platform, trade_date: date, expiry: date, *, spot: Callable[[fl
         batch.append(tick(VIX_TOKEN, ltp=vix, when=t))
         for k in range(strikes[0], strikes[1] + 50, 50):
             for opt in ("CE", "PE"):
-                p = option_price(opt, k, s, dcy)
+                p = option_price(opt, k, s, dcy, ce_skew)
                 batch.append(tick(option_token(k, opt), ltp=p, bid=max(0.05, round(p - 0.1, 2)),
-                                  ask=round(p + 0.1, 2), when=t))
+                                  ask=round(p + 0.1, 2), when=t, oi=oi[0] if opt == "CE" else oi[1]))
         if len(batch) > 20000:
             journal.add_ticks(run_id, batch)
             batch = []

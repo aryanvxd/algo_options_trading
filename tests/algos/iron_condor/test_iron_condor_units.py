@@ -1,8 +1,11 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
+
+import pytest
+from pydantic import ValidationError
 
 from algos.iron_condor import filters
 from algos.iron_condor.exits import PremiumBlowout
-from algos.iron_condor.settings import FilterConfig, IronCondorConfig
+from algos.iron_condor.settings import IronCondorConfig
 from algos.iron_condor.strike_selector import Rejection, Selection, plan_strikes, select_condor
 from tests.helpers import LOT_SIZE, option_price, option_token, tick
 from trading_core.broker.base import BUY, SELL
@@ -10,7 +13,6 @@ from trading_core.broker.charges import ChargeCalculator
 from trading_core.clock import IST
 from trading_core.config import ChargeRates
 from trading_core.kite.instruments import InstrumentInfo
-from trading_core.market.premarket import PremarketSnapshot
 from trading_core.risk.engine import RiskContext
 from trading_core.strategy.position import Leg, Position
 
@@ -23,13 +25,14 @@ def chain(lo=23500, hi=26500, step=50):
                            LOT_SIZE, 0.05) for k in range(lo, hi + step, step) for o in ("CE", "PE")]
 
 
-def quote_fn(spot=25000.0, decay=1.0, spread=0.2, missing=()):
+def quote_fn(spot=25000.0, decay=1.0, spread=0.2, missing=(), ce_skew=1.0, oi=None):
     def q(token):
         if token in missing:
             return None
         k, o = (token - 10_000_000) // 10, "CE" if token % 10 == 1 else "PE"
-        p = option_price(o, k, spot, decay)
-        return tick(token, p, max(0.05, round(p - spread / 2, 2)), round(p + spread / 2, 2))
+        p = option_price(o, k, spot, decay, ce_skew)
+        return tick(token, p, max(0.05, round(p - spread / 2, 2)), round(p + spread / 2, 2),
+                    oi=oi(k, o) if oi else None)
     return q
 
 
@@ -71,19 +74,55 @@ def test_select_condor_rejections():
     assert isinstance(r, Rejection) and "no bid/ask" in r.reason
 
 
-def snap(vix=14.0, gap=0.2, adv=30, dec=20):
-    return PremarketSnapshot(NOW, "NIFTY 50", 25000, 24950, gap, vix, adv, dec)
+def test_premium_balance_is_measured_from_spot_not_atm():
+    # Spot 25020 rounds to ATM 25000; at 300 pts from spot the strikes 25320 / 24720 are not listed,
+    # so prices are interpolated. Toy pricing is symmetric around spot, so the two sides match.
+    b = filters.premium_balance(25020, 300, chain(), quote_fn(spot=25020))
+    assert b is not None and b.ratio == pytest.approx(1.0, abs=0.02)
+    # Measured from the rounded ATM instead (CE 280 pts away, PE 320), the PE would look cheaper
+    # just from rounding.
+    ce_atm = filters.price_at(25300, "CE", chain(), quote_fn(spot=25020))
+    pe_atm = filters.price_at(24700, "PE", chain(), quote_fn(spot=25020))
+    assert pe_atm < ce_atm * 0.9
 
 
-def test_filters():
-    cfg = FilterConfig()
-    assert filters.evaluate(snap(), cfg).trade
-    assert not filters.evaluate(snap(vix=20.0), cfg).trade           # strictly below 20
-    assert not filters.evaluate(snap(vix=None), cfg).trade
-    assert not filters.evaluate(snap(gap=-0.9), cfg).trade
-    assert not filters.evaluate(snap(adv=46, dec=4), cfg).trade
-    assert filters.evaluate(snap(adv=0, dec=0), cfg).trade           # no breadth data: not enforced
-    assert filters.evaluate(snap(gap=1.5), FilterConfig(gap_filter=False)).trade
+def test_premium_balance_flags_the_richer_side():
+    b = filters.premium_balance(25000, 300, chain(), quote_fn(ce_skew=2.0))
+    assert b.richer == "CE" and b.ratio == pytest.approx(2.0, rel=0.05)
+    b = filters.premium_balance(25000, 300, chain(), quote_fn(ce_skew=0.5))
+    assert b.richer == "PE" and b.ratio == pytest.approx(2.0, rel=0.05)
+
+
+def test_price_at_interpolates_and_needs_both_neighbours():
+    q = quote_fn()
+    p_lo, p_hi = filters.price_at(25300, "CE", chain(), q), filters.price_at(25350, "CE", chain(), q)
+    assert filters.price_at(25325, "CE", chain(), q) == pytest.approx((p_lo + p_hi) / 2)
+    assert filters.price_at(25325, "CE", chain(), quote_fn(missing={option_token(25350, "CE")})) is None
+    assert filters.price_at(30000, "CE", chain(), q) is None             # beyond the listed chain
+    assert filters.premium_balance(25000, 300, chain(), lambda t: None) is None
+
+
+def test_pcr_uses_oi_within_range_of_atm():
+    oi = lambda k, o: (2000 if o == "PE" else 1000) if abs(k - 25000) <= 500 else 99_999
+    assert filters.pcr(25000, 500, chain(), quote_fn(oi=oi)) == 2.0      # far strikes ignored
+    assert filters.pcr(25000, 500, chain(), quote_fn()) is None          # no OI on the ticks
+
+
+def test_config_has_only_the_v2_checks():
+    cfg = IronCondorConfig(algo_id="iron_condor", name="x")
+    assert set(cfg.filters.model_dump()) == {"vix_max", "max_premium_ratio", "pcr_range_pts"}
+    with pytest.raises(ValidationError):
+        IronCondorConfig(algo_id="iron_condor", name="x", filters={"breadth_filter": True})
+    with pytest.raises(ValidationError):
+        IronCondorConfig(algo_id="iron_condor", name="x", universe="nifty50")
+
+
+def test_config_yaml_schedule_starts_after_office_arrival():
+    from trading_core.strategy import registry
+
+    _, cfg = registry.load("iron_condor")
+    assert (cfg.schedule.entry, cfg.schedule.entry_deadline) == (time(9, 45), time(10, 0))
+    assert cfg.filters.vix_max == 20 and cfg.filters.max_premium_ratio == 1.5
 
 
 def test_premium_blowout():

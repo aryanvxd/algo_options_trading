@@ -1,58 +1,80 @@
-"""Pre-market TRADE/SKIP decision: VIX, index gap, advance/decline."""
+"""Entry-time market checks: CE/PE premium balance and PCR.
+
+Premium balance compares a call and a put the same distance from *spot* (not the rounded ATM, which
+would make one side look cheaper just from rounding). Prices at the exact distance are linearly
+interpolated between the two neighbouring listed strikes, using mid prices.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from bisect import bisect_left
+from dataclasses import dataclass
+from typing import Callable
 
-from algos.iron_condor.settings import FilterConfig
-from trading_core.market.premarket import PremarketSnapshot
+from trading_core.feed.base import Tick
+from trading_core.kite.instruments import InstrumentInfo
 
-
-@dataclass
-class Check:
-    name: str
-    passed: bool
-    value: float | None = None
-    threshold: float | None = None
-    detail: dict[str, Any] = field(default_factory=dict)
+Quote = Callable[[int], Tick | None]
 
 
-@dataclass
-class Decision:
-    trade: bool
-    checks: list[Check]
-    reason: str | None = None
+@dataclass(frozen=True)
+class PremiumBalance:
+    distance: float
+    ce: float
+    pe: float
+
+    @property
+    def ratio(self) -> float:
+        return max(self.ce, self.pe) / min(self.ce, self.pe)
+
+    @property
+    def richer(self) -> str:
+        return "CE" if self.ce > self.pe else "PE" if self.pe > self.ce else "equal"
 
 
-def evaluate(snap: PremarketSnapshot, cfg: FilterConfig) -> Decision:
-    checks: list[Check] = []
+def mid(t: Tick | None) -> float | None:
+    if t is None:
+        return None
+    if t.has_depth:
+        return (t.bid + t.ask) / 2
+    return t.ltp or None
 
-    if snap.vix is None:
-        checks.append(Check("vix", False, None, cfg.vix_max, {"note": "VIX unavailable"}))
-    else:
-        checks.append(Check("vix", snap.vix < cfg.vix_max, snap.vix, cfg.vix_max))
 
-    if cfg.gap_filter:
-        if snap.gap_pct is None:
-            checks.append(Check("gap_pct", True, None, cfg.max_gap_pct, {"note": "no gap data, not enforced"}))
-        else:
-            checks.append(Check("gap_pct", abs(snap.gap_pct) <= cfg.max_gap_pct, snap.gap_pct, cfg.max_gap_pct))
+def price_at(target: float, opt: str, chain: list[InstrumentInfo], quote: Quote) -> float | None:
+    """Mid price of ``opt`` at strike ``target``, interpolated between the listed strikes around it."""
+    by_strike = {i.strike: i for i in chain if i.instrument_type == opt and i.strike is not None}
+    strikes = sorted(by_strike)
+    i = bisect_left(strikes, target)
+    if i < len(strikes) and strikes[i] == target:
+        return mid(quote(by_strike[target].instrument_token))
+    if i == 0 or i == len(strikes):
+        return None
+    lo, hi = strikes[i - 1], strikes[i]
+    p_lo, p_hi = mid(quote(by_strike[lo].instrument_token)), mid(quote(by_strike[hi].instrument_token))
+    if p_lo is None or p_hi is None:
+        return None
+    return p_lo + (p_hi - p_lo) * (target - lo) / (hi - lo)
 
-    if cfg.breadth_filter:
-        seen = snap.constituents_seen
-        if seen == 0:
-            checks.append(Check("adv_dec", True, None, cfg.adv_dec_extreme_ratio,
-                                {"note": "no breadth data, not enforced"}))
-        else:
-            ratio = max(snap.advances, snap.declines) / seen
-            checks.append(Check("adv_dec", ratio < cfg.adv_dec_extreme_ratio, round(ratio, 3),
-                                cfg.adv_dec_extreme_ratio,
-                                {"advances": snap.advances, "declines": snap.declines, "seen": seen}))
 
-    failed = [c for c in checks if not c.passed]
-    reason = None
-    if failed:
-        reason = "; ".join(f"{c.name}={c.value} vs {c.threshold}" + (f" ({c.detail['note']})" if 'note' in c.detail else "")
-                           for c in failed)
-    return Decision(trade=not failed, checks=checks, reason=reason)
+def premium_balance(spot: float, distance: float, chain: list[InstrumentInfo],
+                    quote: Quote) -> PremiumBalance | None:
+    """CE at ``spot + distance`` vs PE at ``spot - distance``; None until both have prices."""
+    ce = price_at(spot + distance, "CE", chain, quote)
+    pe = price_at(spot - distance, "PE", chain, quote)
+    if not ce or not pe or ce <= 0 or pe <= 0:
+        return None
+    return PremiumBalance(distance, round(ce, 2), round(pe, 2))
+
+
+def pcr(atm: float, range_pts: float, chain: list[InstrumentInfo], quote: Quote) -> float | None:
+    """Put-call ratio of open interest over strikes within ``atm ± range_pts``."""
+    oi = {"CE": 0, "PE": 0}
+    for i in chain:
+        if i.strike is None or abs(i.strike - atm) > range_pts or i.instrument_type not in oi:
+            continue
+        t = quote(i.instrument_token)
+        if t is not None and t.oi:
+            oi[i.instrument_type] += t.oi
+    if not oi["CE"] or not oi["PE"]:
+        return None
+    return round(oi["PE"] / oi["CE"], 3)

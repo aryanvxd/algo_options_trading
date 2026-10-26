@@ -12,10 +12,11 @@ from trading_core.strategy.base import BaseAlgoConfig
 class FilterConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     vix_max: float = 20.0
-    gap_filter: bool = True
-    max_gap_pct: float = 0.8
-    breadth_filter: bool = True
-    adv_dec_extreme_ratio: float = 0.9      # skip if >= 90% of constituents move the same way
+    # Skip (keep waiting) while the dearer of the two short-distance options costs more than this
+    # multiple of the cheaper one: the market is leaning one way.
+    max_premium_ratio: float = 1.5
+    # PCR (put OI / call OI) over strikes within this distance of ATM. Logged only, never blocks.
+    pcr_range_pts: int = 1000
 
 
 class EntryConfig(BaseModel):
@@ -27,11 +28,9 @@ class EntryConfig(BaseModel):
 class ExitConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pnl_basis: Literal["net", "gross"] = "gross"
-    stop_loss_rupees: float = 300.0
-    target_rupees: float = 500.0
-    # If set, these override the rupee values: rupees = points × lot_size × lots.
-    stop_loss_points: float | None = 5.0
-    target_points: float | None = 8.0
+    # Points of premium; rupees = points × lot_size × lots.
+    stop_loss_points: float = 5.0
+    target_points: float = 8.0
     premium_blowout_mult: float = 1.35
     short_leg_mult: float = 2.0
     stale_feed_seconds: float = 10.0
@@ -41,7 +40,6 @@ class IronCondorConfig(BaseAlgoConfig):
     underlying: str = "NIFTY"
     index_symbol: str = "NIFTY 50"
     vix_symbol: str = "INDIA VIX"
-    universe: str = "nifty50"
     strike_step: int = 50
     trade_window_days: int = 3
     width_by_dte: dict[int, int] = Field(default_factory=lambda: {0: 500, 1: 550, 2: 600})

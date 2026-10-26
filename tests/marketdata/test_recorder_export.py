@@ -12,8 +12,8 @@ from trading_core.marketdata.store import MarketStore
 from trading_core.strategy.bootstrap import run_algo
 
 DAY, EXPIRY = date(2026, 10, 23), date(2026, 10, 27)
-LOOSE = {"exits": {"pnl_basis": "gross", "stop_loss_points": None, "target_points": None,
-                   "stop_loss_rupees": 5000, "target_rupees": 300, "stale_feed_seconds": 60}}
+LOOSE = {"exits": {"pnl_basis": "gross", "stop_loss_points": 77, "target_points": 4.6,  # ≈ ₹5,000 / ₹300 on 1 lot
+                   "stale_feed_seconds": 60}}
 
 
 def count(db, model):

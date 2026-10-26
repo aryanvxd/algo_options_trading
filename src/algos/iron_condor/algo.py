@@ -1,22 +1,22 @@
-"""NIFTY weekly short iron condor (paper v1).
+"""NIFTY weekly short iron condor (paper, spec v2: docs/strategy-criteria/iron-condor.md).
 
-Day: trade-day check (expiry day + 2 trading days before it) -> pre-open filters (VIX < 20, gap,
-breadth) -> subscribe NIFTY, VIX and strikes around ATM -> 09:20 entry (hedges first) -> monitor
-exits every loop (kill, stale feed, stop, premium blow-out, target, 15:15 time exit) -> report.
+Day: trade-day check (expiry day + 2 trading days before it) -> subscribe NIFTY, VIX and strikes
+around ATM -> 09:45-10:00 entry: VIX < 20, CE/PE premium balance, spreads, min credit (PCR logged
+only) -> hedges first -> monitor exits every loop (kill, stale feed, stop, premium blow-out,
+target, 15:15 time exit) -> report. No pre-open checks: the laptop is switched on at ~09:35.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from algos.iron_condor import filters
 from algos.iron_condor.exits import PremiumBlowout
 from algos.iron_condor.settings import IronCondorConfig
 from algos.iron_condor.strike_selector import Rejection, select_condor
-from trading_core.config import load_universe
 from trading_core.kite.instruments import InstrumentInfo
 from trading_core.market.options import atm_strike
-from trading_core.market.premarket import PremarketSnapshot
 from trading_core.risk.engine import ExitRule
 from trading_core.risk.rules import KillSwitch, PnlStop, PnlTarget, StaleFeed, TimeExit
 from trading_core.strategy.base import BaseAlgo, SkipDay
@@ -36,7 +36,9 @@ class IronCondorAlgo(BaseAlgo):
         self.lot_size: int | None = None
         self.index_token: int | None = None
         self.vix_token: int | None = None
-        self.premarket_snap: PremarketSnapshot | None = None
+        self.feed_ready = False
+        self.strikes_subscribed = False
+        self.pcr_logged = False
 
     # ------------------------------------------------------------ sizing / levels
 
@@ -44,16 +46,13 @@ class IronCondorAlgo(BaseAlgo):
     def qty(self) -> int:
         return self.cfg.lots * (self.lot_size or 0)
 
-    def _rupees(self, rupees: float, points: float | None) -> float:
-        return points * self.qty if points is not None else rupees
-
     @property
     def stop_rupees(self) -> float:
-        return self._rupees(self.cfg.exits.stop_loss_rupees, self.cfg.exits.stop_loss_points)
+        return self.cfg.exits.stop_loss_points * self.qty
 
     @property
     def target_rupees(self) -> float:
-        return self._rupees(self.cfg.exits.target_rupees, self.cfg.exits.target_points)
+        return self.cfg.exits.target_points * self.qty
 
     def build_exit_rules(self) -> list[ExitRule]:
         e = self.cfg.exits
@@ -122,32 +121,30 @@ class IronCondorAlgo(BaseAlgo):
                       expiry, dte, cfg.width_for(dte), cfg.hedge_for(dte), self.lot_size, self.stop_rupees,
                       self.target_rupees, cfg.exits.pnl_basis)
 
-    def premarket(self) -> None:
-        cfg = self.cfg
-        snap = self.ctx.premarket_source.capture(
-            f"NSE:{cfg.index_symbol}", f"NSE:{cfg.vix_symbol}", load_universe(self.ctx.platform, cfg.universe))
-        if snap is None:
-            raise SkipDay("no pre-market data available")
-        self.premarket_snap = snap
-        self.ctx.journal.add_breadth(self.ctx.run_id, snap)
-        decision = filters.evaluate(snap, cfg.filters)
-        for c in decision.checks:
-            self.check(c.name, c.passed, c.value, c.threshold, **c.detail)
-        if not decision.trade:
-            raise SkipDay(f"pre-market filter: {decision.reason}")
-
     def start_feed(self) -> None:
-        feed, cfg = self.ctx.feed, self.cfg
-        feed.subscribe([self.index_token, self.vix_token])
-        if self.dte is None:      # resumed after a restart with the position already closed
+        self.ctx.feed.subscribe([self.index_token, self.vix_token])
+        self.feed_ready = True
+        self._subscribe_strikes()
+
+    def on_tick(self, now: datetime) -> None:
+        # The first NIFTY tick can arrive a moment after the feed starts; centre the strikes on it then.
+        if self.feed_ready and not self.strikes_subscribed:
+            self._subscribe_strikes()
+        super().on_tick(now)
+
+    def _subscribe_strikes(self) -> None:
+        cfg = self.cfg
+        if self.dte is None or self.finished:
             return
-        spot = self.spot() or (self.premarket_snap.index_spot if self.premarket_snap else None)
+        spot = self.spot()
         if spot is None:
-            raise SkipDay("no NIFTY price to centre the strike subscription on")
+            return
         atm = atm_strike(spot, cfg.strike_step)
-        span = cfg.width_for(self.dte) / 2 + cfg.hedge_for(self.dte) + cfg.subscribe_buffer_pts
+        span = max(cfg.width_for(self.dte) / 2 + cfg.hedge_for(self.dte) + cfg.subscribe_buffer_pts,
+                   cfg.filters.pcr_range_pts)
         tokens = [i.instrument_token for i in self.chain if i.strike is not None and abs(i.strike - atm) <= span]
-        feed.subscribe(tokens)
+        self.ctx.feed.subscribe(tokens)
+        self.strikes_subscribed = True
         self.log.info("subscribed %d option tokens around ATM %s (±%s)", len(tokens), atm, span)
 
     def build_entry(self) -> Position | None:
@@ -157,24 +154,51 @@ class IronCondorAlgo(BaseAlgo):
             return self._wait("no India VIX tick yet")
         if vix >= cfg.filters.vix_max:
             self.check("entry_vix", False, vix, cfg.filters.vix_max)
-            raise SkipDay(f"VIX {vix} >= {cfg.filters.vix_max} at entry")
+            raise SkipDay(f"India VIX {vix} >= {cfg.filters.vix_max} at entry")
         spot = self.spot()
         if spot is None:
             return self._wait("no NIFTY tick yet")
+        if not self.strikes_subscribed:
+            self._subscribe_strikes()
+        quote = self.ctx.feed.latest
+
+        atm = atm_strike(spot, cfg.strike_step)
+        pcr = filters.pcr(atm, cfg.filters.pcr_range_pts, self.chain, quote)
+        if pcr is not None and not self.pcr_logged:
+            self.check("pcr", True, pcr, None, log_only=True, range_pts=cfg.filters.pcr_range_pts)
+            self.pcr_logged = True
 
         width, hedge = cfg.width_for(self.dte), cfg.hedge_for(self.dte)
-        res = select_condor(spot, width, hedge, cfg.strike_step, self.chain, self.ctx.feed.latest, self.qty,
+        balance = filters.premium_balance(spot, width / 2, self.chain, quote)
+        if balance is None:
+            return self._wait("no option prices for the CE/PE premium balance yet")
+        if balance.ratio > cfg.filters.max_premium_ratio:
+            reason = f"CE/PE premium imbalance ({balance.richer} richer)"
+            if reason != self._entry_wait_reason:
+                self.check("premium_balance", False, round(balance.ratio, 3), cfg.filters.max_premium_ratio,
+                           ce=balance.ce, pe=balance.pe, richer=balance.richer, distance=balance.distance)
+            return self._wait(reason)
+
+        res = select_condor(spot, width, hedge, cfg.strike_step, self.chain, quote, self.qty,
                             cfg.entry.max_spread_pts, cfg.entry.min_credit_pts)
         if isinstance(res, Rejection):
             return self._wait(res.reason)
 
         self.check("entry_vix", True, vix, cfg.filters.vix_max)
+        self.check("premium_balance", True, round(balance.ratio, 3), cfg.filters.max_premium_ratio,
+                   ce=balance.ce, pe=balance.pe, richer=balance.richer, distance=balance.distance)
+        if not self.pcr_logged:
+            self.check("pcr", True, pcr, None, log_only=True, note="no OI data")
+            self.pcr_logged = True
         p = res.plan
-        self.log.info("entry plan: spot %.2f ATM %s | %s/%s PE, %s/%s CE | quoted credit %.2f", spot, p.atm,
-                      p.long_pe, p.short_pe, p.short_ce, p.long_ce, res.net_credit_pts)
+        self.log.info("entry plan: spot %.2f ATM %s | %s/%s PE, %s/%s CE | quoted credit %.2f | "
+                      "CE/PE %.2f/%.2f | PCR %s", spot, p.atm, p.long_pe, p.short_pe, p.short_ce, p.long_ce,
+                      res.net_credit_pts, balance.ce, balance.pe, pcr)
         return Position(structure=self.structure, underlying=cfg.underlying, legs=res.legs, expiry=self.expiry,
                         params=dict(dte=self.dte, width=width, hedge=hedge, atm=p.atm, spot=spot, vix=vix,
-                                    lots=cfg.lots, lot_size=self.lot_size, quoted_credit=res.net_credit_pts))
+                                    lots=cfg.lots, lot_size=self.lot_size, quoted_credit=res.net_credit_pts,
+                                    premium_ratio=round(balance.ratio, 3), premium_richer=balance.richer,
+                                    pcr=pcr))
 
     def _wait(self, reason: str) -> None:
         if reason != self._entry_wait_reason:

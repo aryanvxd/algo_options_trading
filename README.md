@@ -24,13 +24,13 @@ file"), use the wrapper in the repo root instead: `.\algo.cmd <command>` (or
 ## Every trading day
 
 ```bash
-.venv/Scripts/algo login                         # before 08:15; Kite tokens expire daily
+.venv/Scripts/algo login                         # each morning (~09:35); Kite tokens expire daily
 .venv/Scripts/algo quote                         # optional smoke test: NIFTY 50 + India VIX
-.venv/Scripts/algo run --algo iron_condor        # runs the day: 08:15 check -> 15:35 report
+.venv/Scripts/algo run --algo iron_condor        # start by ~09:40: entry 09:45-10:00 -> 15:35 report
 ```
 
-Leave `algo run` running. On non-trade days (outside the expiry window, VIX ≥ 20, big gap,
-one-sided breadth) it journals why and exits. While it runs it records ticks every 5 s, so the
+Leave `algo run` running. On non-trade days (outside the expiry window, VIX ≥ 20, CE/PE premiums
+still unbalanced at 10:00) it journals why and exits. Entry rules: `docs/strategy-criteria/`. While it runs it records ticks every 5 s, so the
 day can later be replayed:
 
 ```bash
@@ -62,7 +62,7 @@ Design and source comparison: `docs/design/historical-data-and-backtests.md`.
 ```bash
 algo data bhavcopy --from 2021-01-01             # NSE end-of-day option chains, free; IV/greeks computed
 algo data index --from 2021-01-01                # NIFTY 50 + India VIX 1-min from Kite (needs algo login)
-algo data constituents --from 2021-01-01         # NIFTY 50 stocks, daily, for the breadth filter
+algo data constituents --from 2021-01-01         # NIFTY 50 stocks, daily
 algo data status                                 # what is stored, first/last day, problems
 algo data query "select * from options_eod where trade_date = '2026-10-22' limit 5"
 ```
@@ -78,7 +78,7 @@ vendor (Groww or Upstox) — not built yet.
 ```
 config/platform.yaml          shared settings: DB, charges, paper fill model, runtime intervals
 config/holidays/              NSE holidays (verify against the NSE circular)
-config/universes/nifty50.yaml constituents for pre-open breadth
+config/universes/nifty50.yaml constituents (data downloads; no algo uses it now)
 src/trading_core/             shared platform (never imports from algos)
   kite/        login, REST client, WebSocket ticker, instrument snapshots
   market/      calendar, pre-open snapshot, option-chain helpers

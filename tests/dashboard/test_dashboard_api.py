@@ -14,8 +14,8 @@ from trading_core.strategy.position import Leg, Mark, Position
 
 DAY = date(2026, 10, 23)
 EXPIRY = date(2026, 10, 27)
-FAST_TARGET = {"exits": {"pnl_basis": "gross", "stop_loss_points": None, "target_points": None,
-                         "stop_loss_rupees": 5000, "target_rupees": 300, "stale_feed_seconds": 60}}
+FAST_TARGET = {"exits": {"pnl_basis": "gross", "stop_loss_points": 77, "target_points": 4.6,  # ≈ ₹5,000 / ₹300 on 1 lot
+                         "stale_feed_seconds": 60}}
 
 
 @pytest.fixture
