@@ -1,0 +1,12 @@
+# Not part of the code map: the venv, runtime data (DB holds the Kite token), logs and build output
+.venv/
+data/
+logs/
+__pycache__/
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+.env
+# Third-party bundles (minified Chart.js, Font Awesome) — not our code
+src/dashboard/static/vendor/

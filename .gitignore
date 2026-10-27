@@ -16,3 +16,7 @@ __pycache__/
 .pytest_cache/
 build/
 dist/
+
+# graphify knowledge graph (rebuilt locally: see CLAUDE.md) and per-machine Claude settings
+graphify-out/
+.claude/settings.local.json
