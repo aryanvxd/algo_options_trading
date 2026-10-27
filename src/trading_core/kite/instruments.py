@@ -1,7 +1,7 @@
 """Daily instrument snapshots and lookups (expiries, option chains, index tokens).
 
-Only what the platform needs is stored: option chains for ``instruments.nfo_underlyings`` and the
-NSE index segment. Each day is kept under its own ``as_of_date`` so replays of past days resolve
+Only what the platform needs is stored: option chains and futures for ``instruments.nfo_underlyings``
+and the NSE index segment. Each day is kept under its own ``as_of_date`` so replays of past days resolve
 the same tokens and strikes the live run saw.
 """
 
@@ -47,7 +47,7 @@ def _to_info(r: m.Instrument) -> InstrumentInfo:
 def filter_rows(nfo: Iterable[dict[str, Any]], nse: Iterable[dict[str, Any]],
                 underlyings: list[str]) -> list[dict[str, Any]]:
     wanted = set(underlyings)
-    out = [r for r in nfo if r.get("segment") == "NFO-OPT" and r.get("name") in wanted]
+    out = [r for r in nfo if r.get("segment") in ("NFO-OPT", "NFO-FUT") and r.get("name") in wanted]
     out += [r for r in nse if r.get("segment") == "INDICES"]
     return out
 
@@ -95,6 +95,15 @@ class InstrumentStore:
             return s.scalar(select(func.min(m.Instrument.expiry)).where(
                 m.Instrument.as_of_date == as_of, m.Instrument.name == underlying,
                 m.Instrument.segment == "NFO-OPT", m.Instrument.expiry >= as_of))
+
+    def nearest_future(self, underlying: str, as_of: date) -> InstrumentInfo | None:
+        """The near-month future (None for snapshots taken before futures were stored)."""
+        with self.db.session() as s:
+            r = s.scalars(select(m.Instrument).where(
+                m.Instrument.as_of_date == as_of, m.Instrument.name == underlying,
+                m.Instrument.segment == "NFO-FUT", m.Instrument.expiry >= as_of,
+            ).order_by(m.Instrument.expiry)).first()
+            return _to_info(r) if r else None
 
     def option_chain(self, underlying: str, expiry: date, as_of: date) -> list[InstrumentInfo]:
         with self.db.session() as s:

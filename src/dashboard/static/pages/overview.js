@@ -13,10 +13,7 @@
     SKIPPED: ['Skipped', 'tone-slate', false],
     ERROR: ['Error', 'tone-red', false],
   };
-  const REASONS = {
-    TIME_EXIT: 'Time exit', STOP_LOSS: 'Stop loss', TARGET: 'Target', PREMIUM_BLOWOUT: 'Premium blow-out',
-    KILL_SWITCH: 'Kill switch', STALE_FEED: 'Stale feed', ENTRY_FAILED: 'Entry failed', MAX_DAILY_LOSS: 'Max daily loss',
-  };
+  const REASONS = App.REASONS;
 
   let state = null;
   let timers = [];
@@ -189,7 +186,8 @@
       note = `Best ${App.money(s.max_profit)} · worst ${App.money(s.max_drawdown)} during the trade`;
     const sub = state.source === 'replay' ? `Replay run #${s.run_id}` : (s.spot ? `NIFTY ${App.num(s.spot, 1)} · VIX ${App.num(s.vix, 2)}` : `Run #${s.run_id}`);
 
-    return `<div class="strategy-card" style="--strategy-color:${App.colorFor(s.algo_id)}">
+    return `<a class="strategy-card card-link" href="#/strategy/${App.esc(s.algo_id)}/today" title="Open the strategy page"
+      style="--strategy-color:${App.colorFor(s.algo_id)}">
       <div class="strategy-top">
         <div><div class="strategy-name">${App.esc(s.name)}</div><div class="strategy-sub">${sub}</div></div>
         <div class="chips">${modeChip}${chip(st[0], st[1], live)}</div>
@@ -204,7 +202,7 @@
       </div>
       ${reason ? `<div class="strategy-note"><i class="fa-solid fa-door-open"></i> Exit: ${App.esc(reason)}</div>` : ''}
       ${note ? `<div class="strategy-note">${note}</div>` : ''}
-    </div>`;
+    </a>`;
   }
 
   function sparkline(s, animate) {

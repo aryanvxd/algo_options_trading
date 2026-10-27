@@ -130,6 +130,8 @@ class Journal:
             row.exit_reason = pos.exit_reason
             row.entry_credit_pts = pos.entry_credit_pts
             row.exit_debit_pts = pos.exit_debit_pts
+            row.capital_required, row.capital_source = pos.capital_required, pos.capital_source
+            row.spot_at_entry, row.spot_at_exit = pos.spot_at_entry, pos.spot_at_exit
             if pos.status == "CLOSED":
                 row.gross_pnl = pos.realized_gross
                 row.charges = pos.total_charges
@@ -155,7 +157,9 @@ class Journal:
                         for l in r.legs]
                 out.append(Position(structure=r.structure, underlying=r.underlying, legs=legs, expiry=r.expiry,
                                     params=r.params or {}, position_id=r.position_id, status=r.status,
-                                    entry_time=r.entry_time, exit_time=r.exit_time, exit_reason=r.exit_reason))
+                                    entry_time=r.entry_time, exit_time=r.exit_time, exit_reason=r.exit_reason,
+                                    capital_required=r.capital_required, capital_source=r.capital_source,
+                                    spot_at_entry=r.spot_at_entry, spot_at_exit=r.spot_at_exit))
         return out
 
     @staticmethod

@@ -74,3 +74,10 @@ class KiteClient:
 
     def margins(self) -> dict[str, Any]:
         return self._call(self.kite.margins)
+
+    def basket_margin(self, orders: list[dict[str, Any]]) -> float | None:
+        """Margin Kite would block for these orders together (hedge benefit included), ignoring the
+        account's real positions. Read-only: nothing is placed."""
+        res = self._call(self.kite.basket_order_margins, orders, False) or {}
+        total = (res.get("final") or {}).get("total")
+        return float(total) if total else None

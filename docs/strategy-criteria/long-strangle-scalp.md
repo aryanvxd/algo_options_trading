@@ -1,8 +1,8 @@
 # NIFTY long strangle scalp
 
-- **Status:** plan — not built. The design decisions are made (section 11). The thresholds
-  marked *(proposed)* are starting points, to be tuned on recorded data before paper trading.
-- **Mode:** none yet (record first, then paper — see section 9).
+- **Status:** v0.1 implemented in `src/algos/strangle_scalp/` (config version 0.1.0, 27 Oct 2026).
+  The thresholds marked *(proposed)* are starting points, to be tuned from the paper days' logs.
+- **Mode:** paper, 1 lot, every trading day from 28 Oct 2026.
 - **Last changed:** 27 Oct 2026.
 
 ## 1. Idea
@@ -213,18 +213,26 @@ break even. Charges take about a third of the stop. Three ways to improve this:
 - Peak and trough P&L, exit reason, hold time, gross / charges / net.
 - Day totals: trades, wins, losses, and why it stopped.
 
-## 9. What has to be built (platform)
+## 9. Platform pieces (built 27 Oct 2026)
 
-| Needed | Status today |
+| Needed | Status |
 |---|---|
-| **1-second tick recording** for this algo's strikes | the recorder snapshots every **5 s** (`runtime.tick_snapshot_interval_s`). A 5-second signal can't be replayed from 5-second data. Make it per-algo and set it to 1 s here |
-| **Recording on every trading day** | today strikes are only recorded on condor days (Fri/Mon/Tue). This algo would record from day one, even before trading |
-| NIFTY futures token in the feed | not subscribed today (spot and VIX only) |
-| Multiple trades per day | `BaseAlgo` / runner do one trade per day. Needs a loop: flat → entry → exit → cool-down → flat, up to 3 |
-| Trailing stop, stall and max-hold exits | new exit rules in `risk/` (reusable by later algos) |
-| One-leg-filled unwind | the condor's "unwind anything filled" path, applied to two legs |
-| Latency in paper fills | paper fills at the tick that fired the signal. For a scalp that is optimistic: fill at the **next** tick instead, or raise slippage for this algo to 0.2 |
-| Two algos at once | condor and scalp run as two `algo run` processes. Kite allows 3 WebSocket connections per API key, so this is fine. They share the 09:45–10:00 window but use separate capital buckets |
+| 1-second tick recording | done: per-algo `tick_snapshot_interval_s` (1 s here; the condor keeps 5 s) |
+| Recording on every trading day | done: the scalp runs every day and records NIFTY, VIX, futures and strikes ±600 while it runs (09:35–10:50) |
+| NIFTY futures in the feed | done: near-month future stored in the daily instrument snapshot; S4 falls back to spot if it is missing |
+| Multiple trades per day | done: `max_trades`, `reentry_cooldown_s` and `reentry_block()` in `BaseAlgo`; a restart resumes with the day's trades counted |
+| Trailing stop, stall and max-hold exits | done: `TrailingStop`, `Stall`, `MaxHold` in `trading_core/risk/rules.py` |
+| One-leg-filled unwind | done: the shared executor unwinds a partial entry; it counts as a trade |
+| Capital per trade | done: premium paid + entry charges (`positions.capital_required`, source `premium`) |
+| Latency in paper fills | **not done**: paper fills at the tick that fired the signal, which is optimistic for a scalp. Watch the slippage in the fills and raise `paper.slippage_pts` if live fills turn out worse |
+| Two algos at once | fine: two `algo run` windows; Kite allows 3 WebSocket connections per API key |
+
+Two behaviours added while testing on recorded data:
+- The pair is **not re-selected while the signal is building** (V rising), and the current pair
+  is **kept while it still qualifies**. Otherwise two near-equal pairs swapped every 30 s and
+  each swap restarted the signal.
+- On 1+ DTE, every call/put combination with a delta in the band is considered: matched
+  premiums first, then the pair closest to delta 0.30 on both sides.
 
 ### Build order *(proposed)*
 
@@ -273,6 +281,9 @@ Decided 27 Oct 2026:
    worst case for this trade.
 5. **Record first:** 2 weeks of 1-second recording before any paper trade. It costs nothing,
    and without it a 5-second signal can't be tested at all (section 9).
+   *Changed 27 Oct 2026:* paper trading starts as soon as the algo is built, on every day, and
+   recording runs alongside it. Live trading will later use only the days the paper results
+   show to be profitable.
 
 Still open (answered by the replay test, not now): the exact S3/S4 thresholds, N, whether D7
 (opening range) helps, and whether 3–4 DTE days stay in.

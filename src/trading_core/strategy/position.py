@@ -100,6 +100,10 @@ class Position:
     entry_time: datetime | None = None
     exit_time: datetime | None = None
     exit_reason: str | None = None
+    capital_required: float | None = None   # rupees blocked to hold it: broker margin, or premium paid
+    capital_source: str | None = None       # kite_margin | estimate | premium
+    spot_at_entry: float | None = None
+    spot_at_exit: float | None = None
 
     @property
     def unit_qty(self) -> int:

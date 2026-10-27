@@ -61,7 +61,7 @@ def export_day(db: Database, store: MarketStore, manifest: Manifest, day: date) 
                 ts=_naive(t.ts), trade_date=day, instrument_token=t.instrument_token, underlying=inst.name,
                 expiry=inst.expiry, strike=inst.strike, opt_type=inst.instrument_type, ltp=t.ltp, bid=t.bid,
                 ask=t.ask, bid_qty=t.bid_qty, ask_qty=t.ask_qty, oi=t.oi, volume=t.volume, source=SOURCE))
-        elif inst.segment == "INDICES":
+        elif inst.segment in ("INDICES", "NFO-FUT"):     # futures: last price only, like an index
             index[inst.tradingsymbol].append(dict(ts=_naive(t.ts), trade_date=day,
                                                   instrument_token=t.instrument_token,
                                                   symbol=inst.tradingsymbol, ltp=t.ltp, source=SOURCE))

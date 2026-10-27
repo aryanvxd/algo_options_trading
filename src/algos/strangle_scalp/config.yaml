@@ -1,0 +1,65 @@
+# NIFTY long strangle scalp — every tunable number lives here.
+# Spec: docs/strategy-criteria/long-strangle-scalp.md. Times are IST and must be quoted ("09:45").
+# The thresholds are starting points: tune them from the paper days' logs.
+
+algo_id: strangle_scalp
+name: NIFTY Long Strangle Scalp
+version: "0.1.0"
+description: Buy an OTM CE+PE pair when its value keeps rising with a fast NIFTY move; up to 3 scalps 09:45-10:30.
+mode: paper            # live is disabled in v1
+lots: 1
+capital: 12000         # bucket: the dearest pair (~₹130 on 3-4 DTE ≈ ₹8,500 at 1 lot) plus a buffer
+
+max_trades: 3
+reentry_cooldown_s: 180        # D2: 3 minutes between an exit and the next entry
+tick_snapshot_interval_s: 1    # record the book every second (a 5 s signal can't be replayed from 5 s data)
+position_snapshot_interval_s: 1
+
+underlying: NIFTY
+index_symbol: "NIFTY 50"
+vix_symbol: "INDIA VIX"
+strike_step: 50
+
+pair:
+  premium_min_0dte: 15         # expiry day: each leg's mid in ₹15-30
+  premium_max_0dte: 30
+  target_delta: 0.30           # other days: each leg's delta nearest 0.30 ...
+  delta_min: 0.25              # ... within 0.25-0.35
+  delta_max: 0.35
+  max_premium_ratio: 1.3       # dearer leg ÷ cheaper leg
+  max_spread_pts_0dte: 0.30
+  max_spread_pts: 0.50
+  max_quote_age_s: 2           # both legs ticked within this many seconds
+  reselect_every_s: 30
+  subscribe_range_pts: 600
+  resubscribe_drift_pts: 200
+
+signal:
+  window_s: 5                  # V = mid(CE) + mid(PE) must rise in each 5 s window ...
+  windows: 3                   # ... 3 in a row (~15 s)
+  min_rise_pct: 2.0            # V up at least 2% over those 15 s
+  min_fut_move_pts_0dte: 12    # NIFTY futures moved >= 12 pts either way in the same 15 s (expiry day)
+  min_fut_move_pts: 18         # ... >= 18 pts on other days (dearer pair, needs a bigger move)
+
+limits:
+  max_consecutive_losses: 2    # stop for the day after 2 losing trades in a row
+  max_day_loss: 800            # ... or once the day is down ₹800 net (also exits an open trade)
+  day_profit_lock: null        # e.g. 1000 to stop after a good morning; off for now
+
+exits:
+  pnl_basis: gross             # stop/target on gross P&L (marked at bid); net is logged too
+  stop_loss_points: 4.6        # points on the pair × lot size × lots (4.6 × 65 = ₹299 at 1 lot)
+  target_points: 7.7           # 7.7 × 65 = ₹500
+  trail_activate_points: 4.6   # once +₹300 ...
+  trail_keep_fraction: 0.5     # ... exit if P&L falls back to half its peak
+  stall_seconds: 90            # exit when P&L has made no new high for 90 s
+  max_hold_seconds: 480        # 8 minutes
+  stale_feed_seconds: 5
+
+schedule:
+  day_check: "08:15"           # past-due steps run as soon as the algo starts (~09:35)
+  start_feed: "09:15"
+  entry: "09:45"
+  entry_deadline: "10:30"      # no new trade after this
+  square_off: "10:45"
+  report: "10:50"

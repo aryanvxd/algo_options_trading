@@ -1,4 +1,4 @@
-# Algo platform (Zerodha Kite) — first algo: NIFTY short iron condor
+# Algo platform (Zerodha Kite) — NIFTY short iron condor and long strangle scalp
 
 A shared Python platform for running several intraday algos on Kite Connect, paper first.
 Each algo lives in its own folder under `src/algos/`; everything else (login, data feed, calendar,
@@ -27,8 +27,14 @@ file"), use the wrapper in the repo root instead: `.\algo.cmd <command>` (or
 .venv/Scripts/algo login                         # each morning (~09:35); Kite tokens expire daily
 .venv/Scripts/algo quote                         # optional smoke test: NIFTY 50 + India VIX
 .venv/Scripts/algo run --algo iron_condor        # start by ~09:40: entry 09:45-10:00 -> 15:35 report
-.venv/Scripts/algo logout                        # when the run has finished (or after closing it)
+.venv/Scripts/algo run --algo strangle_scalp     # second window, same time: scalps 09:45-10:30 -> 10:50 report
+.venv/Scripts/algo logout                        # when every run has finished (or after closing them)
 ```
+
+Each algo runs in its own window (Kite allows 3 WebSocket connections per API key). The iron
+condor trades only on expiry day and the 2 trading days before it; the scalp trades every day,
+up to 3 trades, and records the book every second while it runs. After pulling new code, run
+`.venv/Scripts/algo db upgrade` once (it adds new columns/tables; existing data is kept).
 
 Leave `algo run` running. On non-trade days (outside the expiry window, VIX ≥ 20, CE/PE premiums
 still unbalanced at 10:00) it journals why and exits. Only one `algo run` per algo can run at a
@@ -52,9 +58,14 @@ picks up the open position from the database.
 .venv/Scripts/algo dashboard                     # http://127.0.0.1:8050, opens your browser
 ```
 
-Read-only view of the same database, so it can run alongside the algos or be closed at any
-time. The Overview page shows the day's P&L grouped by strategy (paper / live, real sessions or
-replays), intraday P&L, the last 30 days and a per-strategy scorecard; today's view refreshes
+It reads the same database, so it can run alongside the algos or be closed at any time; its only
+writes are your journal notes (a table no algo reads). The Overview page shows the day's P&L
+grouped by strategy (paper / live, real sessions or replays), intraday P&L, the last 30 days and a
+per-strategy scorecard. Each strategy has its own page under **Strategies** with tabs: Today
+(status, live P&L, payoff chart, P&L curve, checks, timeline; the scalp adds its signal panel),
+Trade log (capital used and ROI per trade, filters, CSV), Journal (each day's decisions and your
+notes), Performance (equity curve, drawdown, results by days-to-expiry / weekday / exit / entry
+time) and Rules (the config, what changed since the last run, the spec). Live views refresh
 every 5 seconds. Frontend is plain HTML/CSS/JS in `src/dashboard/static/` (no build step;
 Chart.js and Font Awesome are vendored so it works offline).
 
@@ -93,6 +104,7 @@ src/trading_core/             shared platform (never imports from algos)
   db/          SQLAlchemy models, Alembic migrations, Journal (all reads/writes)
   reporting/   end-of-day report files
 src/algos/iron_condor/        the iron condor: config.yaml, filters, strike selector, blow-out exit
+src/algos/strangle_scalp/     the scalp: config.yaml, pair selector (premium / delta), entry signal
 src/algos/_template/          copy this to start a new algo
 tests/                        unit tests + full-day replays of synthetic data
 data/, logs/                  runtime output (git-ignored; the DB holds the daily access token)
@@ -102,7 +114,9 @@ data/, logs/                  runtime output (git-ignored; the DB holds the dail
 
 Copy `src/algos/_template` to `src/algos/<algo_id>`, set `algo_id` in its `config.yaml`, and
 implement `day_check`, `premarket`, `start_feed`, `build_entry` and `build_exit_rules`.
-Orders, exits, snapshots, the kill switch and reports come from `BaseAlgo`.
+Orders, exits, snapshots, the kill switch, capital used per trade and reports come from
+`BaseAlgo`. For more than one trade a day set `max_trades` (and `reentry_cooldown_s`) in the
+config and override `reentry_block` for the algo's own day limits.
 
 ## Tests
 
@@ -112,6 +126,6 @@ Orders, exits, snapshots, the kill switch and reports come from `BaseAlgo`.
 
 ## Status
 
-- Phases 0–2 of the plan are built; the dashboard (Phase 3) and backtester (Phase 5) are next.
+- Phases 0–3 of the plan are built (dashboard: overview + strategy pages); the backtester (Phase 5) is next.
 - Live order placement is intentionally not implemented (`broker/live.py`).
 - Charge rates and the holiday list were entered from memory — check them before trusting net P&L.

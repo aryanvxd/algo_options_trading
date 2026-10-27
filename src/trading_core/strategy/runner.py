@@ -161,8 +161,8 @@ class Runner:
             self._last_live_state = now
             algo.write_live_state(now)
 
-        if self.feed_started and not ctx.is_replay and \
-                self._due(self._last_record, now, self.rt.tick_snapshot_interval_s):
+        record_every = algo.cfg.tick_snapshot_interval_s or self.rt.tick_snapshot_interval_s
+        if self.feed_started and not ctx.is_replay and self._due(self._last_record, now, record_every):
             since = self._last_record
             self._last_record = now
             ticks = [t for t in ctx.feed.snapshot() if since is None or t.received_at > since]

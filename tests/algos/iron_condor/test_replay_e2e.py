@@ -66,6 +66,11 @@ def test_flat_day_time_exit_writes_a_consistent_journal(platform, db):
     assert pos.net_pnl == pytest.approx(pos.gross_pnl - pos.charges)
     assert pos.gross_pnl == pytest.approx(sum(l.pnl for l in pos.legs))
 
+    # No Kite margin in a replay: capital is the worst loss at expiry, (hedge − credit) × qty.
+    assert pos.capital_source == "estimate"
+    assert pos.capital_required == pytest.approx((300 - pos.entry_credit_pts) * legs["SHORT_CE"].qty)
+    assert pos.spot_at_entry == 25000.0 and pos.spot_at_exit == 25000.0
+
     summary = one(db, m.DailySummary, run_id=run_id)
     assert summary.traded and summary.net_pnl == pytest.approx(pos.net_pnl)
     assert summary.exit_reason == "TIME_EXIT"

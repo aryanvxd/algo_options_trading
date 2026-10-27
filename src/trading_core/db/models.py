@@ -157,6 +157,10 @@ class Position(Base):
     charges: Mapped[float | None] = mapped_column(Float)
     net_pnl: Mapped[float | None] = mapped_column(Float)
     params: Mapped[dict[str, Any] | None]
+    capital_required: Mapped[float | None] = mapped_column(Float)   # margin blocked, or premium paid
+    capital_source: Mapped[str | None] = mapped_column(String(20))  # kite_margin | estimate | premium
+    spot_at_entry: Mapped[float | None] = mapped_column(Float)
+    spot_at_exit: Mapped[float | None] = mapped_column(Float)
 
     legs: Mapped[list["Leg"]] = relationship(back_populates="position", order_by="Leg.leg_id")
 
@@ -316,6 +320,21 @@ class DailySummary(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (Index("ix_summary_algo_date", "algo_id", "trade_date"),)
+
+
+class JournalNote(Base):
+    """Your own notes on a strategy's day or trade, written from the dashboard. Algos never read it."""
+    __tablename__ = "journal_notes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    algo_id: Mapped[str] = mapped_column(String(40))
+    trade_date: Mapped[date] = mapped_column(Date)
+    position_id: Mapped[int | None] = mapped_column(ForeignKey("positions.position_id"))   # None = the whole day
+    text: Mapped[str] = mapped_column(Text, default="")
+    tags: Mapped[list[Any] | None]
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+
+    __table_args__ = (Index("ix_notes_algo_date", "algo_id", "trade_date"),)
 
 
 # ---------------------------------------------------------------- market data (Parquet store manifest)
