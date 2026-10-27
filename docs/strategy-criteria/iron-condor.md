@@ -1,9 +1,9 @@
 # NIFTY short iron condor
 
-- **Status:** v2 — implemented in `src/algos/iron_condor/` (config version 0.2.0, 26 Oct 2026).
+- **Status:** v2 — implemented in `src/algos/iron_condor/` (config version 0.2.1, 27 Oct 2026).
   Section 9 lists what changed from v1.
-- **Mode:** paper, 1 lot.
-- **Last changed:** 26 Oct 2026.
+- **Mode:** paper, 2 lots (from 27 Oct 2026; was 1).
+- **Last changed:** 27 Oct 2026.
 
 ## 1. Idea
 
@@ -92,30 +92,31 @@ never sent and anything filled is unwound.
 
 ## 6. Exit criteria (checked every second, first match wins)
 
-| Priority | Rule | Trigger | 1 lot (65) |
+| Priority | Rule | Trigger | 2 lots (130) |
 |---|---|---|---|
 | 1 | Kill switch | `algo kill`, or 5 errors in a row | — |
 | 2 | Stale feed | no tick for 10 s | — |
-| 3 | Stop loss | gross P&L ≤ −5 pts × lot size × lots | −₹325 |
+| 3 | Stop loss | gross P&L ≤ −5 pts × lot size × lots | −₹650 |
 | 4 | Premium blow-out | cost to close ≥ 1.35 × entry credit, **or** any short leg ≥ 2× its entry price | — |
-| 5 | Target | gross P&L ≥ +8 pts × lot size × lots | +₹520 |
+| 5 | Target | gross P&L ≥ +8 pts × lot size × lots | +₹1,040 |
 | 6 | Time exit | 15:15 | — |
 
 P&L is marked at the prices you would actually get when closing (shorts at ask, hedges at bid),
-not at LTP. Stop and target use **gross** P&L. Net P&L after charges (about ₹190–250 per round
-trip for 1 lot) is logged alongside it.
+not at LTP. Stop and target use **gross** P&L. Net P&L after charges is logged alongside it.
+Charges are mostly the flat ₹20 brokerage per order (8 per round trip), so they barely grow with
+lots: the 27 Oct trade cost ₹192.15 at 1 lot and would have cost ₹195.46 at 2 lots.
 
 ## 7. Capital allocation
 
 | Item | Rule (proposed — confirm) |
 |---|---|
-| Lots | 1 lot during paper and for the first live month |
+| Lots | **2 lots** in paper from 27 Oct 2026 (was 1). Go live at the lot size paper ran at |
 | Capital set aside | Kite basket margin for the 4 legs **plus** a 50% buffer. Check the margin in Kite on a real day and write the number here: `₹ ____` |
-| Worst-case loss per trade | (hedge − credit) × 65. Roughly ₹12k at 0 DTE (200 hedge) to ₹18k at 2 DTE (300 hedge) — only if NIFTY gaps through both the stop and the hedge |
-| Planned loss per trade | stop ₹325 + slippage; treat ₹600 as a normal bad day |
-| Max loss per day | 1 trade per day, so = one stop-out. Any day losing more than **₹1,000** is reviewed by hand |
-| Max loss per week | **₹1,500** (≈ 3 full stop-outs incl. charges) → strategy pauses until reviewed |
-| Max loss per month | **₹4,000** → strategy pauses, re-check parameters on paper |
+| Worst-case loss per trade | (hedge − credit) × 65 × lots. At 2 lots roughly ₹24k at 0 DTE (200 hedge) to ₹37k at 2 DTE (300 hedge) — only if NIFTY gaps through both the stop and the hedge |
+| Planned loss per trade | stop ₹650 + slippage + ~₹200 charges; treat ₹1,000 as a normal bad day |
+| Max loss per day | 1 trade per day, so = one stop-out. Any day losing more than **₹1,500** is reviewed by hand |
+| Max loss per week | **₹3,000** (≈ 3 full stop-outs incl. charges at 2 lots) → strategy pauses until reviewed |
+| Max loss per month | **₹8,000** → strategy pauses, re-check parameters on paper |
 | Scaling up | +1 lot only after 20+ trade days with positive **net** P&L and a worst day you are comfortable with; never more than +1 lot per month |
 | Scaling down | back to 1 lot after a monthly loss limit hit |
 
@@ -147,6 +148,9 @@ order, all six exits, one trade a day.
 
 Decided 26 Oct 2026: PCR is log-only; an unbalanced CE/PE premium waits and re-checks until
 10:00; last entry 10:00; premium blow-out exit kept.
+
+Decided 27 Oct 2026: paper trades **2 lots** (config 0.2.1). Stop/target stay in points, so in
+rupees they double (₹650 / ₹1,040); the day/week/month limits in section 7 were doubled to match.
 
 Still open:
 

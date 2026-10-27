@@ -3,10 +3,10 @@
 
 algo_id: iron_condor
 name: NIFTY Short Iron Condor
-version: "0.2.0"
+version: "0.2.1"
 description: Sell OTM CE+PE, buy further-OTM hedges; expiry day and the 2 trading days before it.
 mode: paper            # live is disabled in v1
-lots: 1
+lots: 2                # 27 Oct 2026: 1 -> 2 (charges are mostly flat ₹20/order: ~₹195 vs ~₹192 per trade)
 
 underlying: NIFTY
 index_symbol: "NIFTY 50"
@@ -35,8 +35,8 @@ exits:
   # charges is still logged in snapshots, live state and the daily summary.
   # With 1 lot, a net-of-charges ₹300 stop fires the moment the trade opens (~₹190 charges + spread).
   pnl_basis: gross             # gross | net (net = after entry charges + estimated exit charges)
-  stop_loss_points: 5          # points of premium × lot size × lots (5 × 65 = ₹325 for 1 lot)
-  target_points: 8             # 8 × 65 = ₹520 for 1 lot
+  stop_loss_points: 5          # points of premium × lot size × lots (5 × 65 × 2 = ₹650)
+  target_points: 8             # 8 × 65 × 2 = ₹1,040
   premium_blowout_mult: 1.35   # exit if cost to close >= 1.35 × entry credit
   short_leg_mult: 2.0          # ... or any short leg doubles
   stale_feed_seconds: 10
