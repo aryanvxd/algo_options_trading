@@ -27,10 +27,14 @@ file"), use the wrapper in the repo root instead: `.\algo.cmd <command>` (or
 .venv/Scripts/algo login                         # each morning (~09:35); Kite tokens expire daily
 .venv/Scripts/algo quote                         # optional smoke test: NIFTY 50 + India VIX
 .venv/Scripts/algo run --algo iron_condor        # start by ~09:40: entry 09:45-10:00 -> 15:35 report
+.venv/Scripts/algo logout                        # when the run has finished (or after closing it)
 ```
 
 Leave `algo run` running. On non-trade days (outside the expiry window, VIX ≥ 20, CE/PE premiums
-still unbalanced at 10:00) it journals why and exits. Entry rules: `docs/strategy-criteria/`. While it runs it records ticks every 5 s, so the
+still unbalanced at 10:00) it journals why and exits. Only one `algo run` per algo can run at a
+time; a second one stops with a message. If the window is closed by mistake, start `algo run`
+again: it resumes the open trade (with a 10 s grace for the feed to reconnect), or, if the trade
+had already closed, writes the day's report at once and exits. Entry rules: `docs/strategy-criteria/`. While it runs it records ticks every 5 s, so the
 day can later be replayed:
 
 ```bash

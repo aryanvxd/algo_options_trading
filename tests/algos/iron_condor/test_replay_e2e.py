@@ -106,10 +106,12 @@ def test_non_window_day_skipped(platform, db):
 
 
 def test_pdf_net_stop_fires_almost_immediately_for_one_lot(platform, db):
-    """The PDF defaults (net P&L after charges, about -₹300 stop) on 1 lot: spread + slippage + ~₹190
-    of charges put the trade below -₹300 the moment it opens. This documents that finding."""
+    """The PDF defaults (net P&L after charges, about -₹300 stop) on 1 lot with pessimistic fills
+    (0.5 pt slippage per leg): spread + slippage + ~₹190 of charges put the trade below -₹300 the
+    moment it opens. This documents that finding."""
     pdf = {"exits": {"pnl_basis": "net", "stop_loss_points": 4.6, "target_points": 7.7,
                      "stale_feed_seconds": 60}}
+    platform.paper.slippage_pts = 0.5
     run_id = run(platform, db, pdf, spot=lambda f: 25000.0, decay=lambda f: 1.0 - 0.3 * f)
     pos = one(db, m.Position, run_id=run_id)
     assert pos.exit_reason == "STOP_LOSS"

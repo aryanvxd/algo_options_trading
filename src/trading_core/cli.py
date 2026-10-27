@@ -2,6 +2,7 @@
 
   algo db upgrade                      create/upgrade the database and load holidays
   algo login                           daily Kite login (once each morning)
+  algo logout                          end today's Kite session (after the run)
   algo quote                           smoke test: print NIFTY 50 and India VIX
   algo instruments                     refresh today's instrument snapshot
   algo list                            list available algos
@@ -52,6 +53,14 @@ def cmd_login(args: argparse.Namespace, platform: PlatformConfig) -> int:
     return 0
 
 
+def cmd_logout(args: argparse.Namespace, platform: PlatformConfig) -> int:
+    from trading_core.kite.auth import logout
+
+    n = logout(_db(platform), load_secrets(platform.root), LiveClock())
+    print("Logged out." if n else "No active Kite session.")
+    return 0
+
+
 def cmd_quote(args: argparse.Namespace, platform: PlatformConfig) -> int:
     from trading_core.kite.client import KiteClient
 
@@ -83,7 +92,7 @@ def cmd_list(args: argparse.Namespace, platform: PlatformConfig) -> int:
 
 
 def cmd_run(args: argparse.Namespace, platform: PlatformConfig) -> int:
-    from trading_core.strategy.bootstrap import AlreadyRan, run_algo
+    from trading_core.strategy.bootstrap import AlreadyRan, AlreadyRunning, run_algo
 
     replay = date.fromisoformat(args.replay) if args.replay else None
     trade_date = replay or LiveClock().today()
@@ -93,7 +102,7 @@ def cmd_run(args: argparse.Namespace, platform: PlatformConfig) -> int:
     try:
         run_id = run_algo(platform, _db(platform), args.algo, mode=args.mode, replay_date=replay,
                           force_new=args.force_new)
-    except AlreadyRan as e:
+    except (AlreadyRan, AlreadyRunning) as e:
         print(e)
         return 1
     print(f"Run {run_id} finished.")
@@ -240,6 +249,7 @@ def build_parser() -> argparse.ArgumentParser:
     lg.add_argument("--no-browser", action="store_true", help="print the URL instead of opening a browser")
     lg.set_defaults(fn=cmd_login)
 
+    sub.add_parser("logout", help="end today's Kite session").set_defaults(fn=cmd_logout)
     sub.add_parser("quote", help="print NIFTY 50 and India VIX").set_defaults(fn=cmd_quote)
     sub.add_parser("instruments", help="refresh today's instrument snapshot").set_defaults(fn=cmd_instruments)
     sub.add_parser("list", help="list algos").set_defaults(fn=cmd_list)

@@ -44,7 +44,7 @@ class ChargeRates(BaseModel):
 
 
 class PaperConfig(BaseModel):
-    slippage_pts: float = 0.5
+    slippage_pts: float = 0.1
     max_spread_pts: float = 5.0
     tick_size: float = 0.05
 

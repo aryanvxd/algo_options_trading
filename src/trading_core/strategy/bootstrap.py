@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
+from contextlib import contextmanager, nullcontext
 from datetime import date, time
-from typing import Any
+from pathlib import Path
+from typing import Any, Iterator
 
 from trading_core.broker.charges import ChargeCalculator
 from trading_core.broker.paper import PaperBroker
@@ -29,6 +32,39 @@ class AlreadyRan(RuntimeError):
     pass
 
 
+class AlreadyRunning(RuntimeError):
+    pass
+
+
+@contextmanager
+def single_instance(path: Path) -> Iterator[None]:
+    """Hold an OS file lock for the life of a live run.
+
+    A second ``algo run`` for the same algo would resume the same run with its own feed and broker
+    and fight the first one over the position. The OS drops the lock when the process ends, even if
+    the window is closed or the process is killed, so a stale lock can never block the next day.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(path, "a+")
+    try:
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise AlreadyRunning(f"another `algo run` for this algo is already running (lock: {path}). "
+                                 "Close it first, or use `algo kill` to stop it.") from None
+        yield
+    finally:
+        f.close()
+
+
 def run_algo(platform: PlatformConfig, db: Database, algo_id: str, *, mode: str | None = None,
              replay_date: date | None = None, overrides: dict[str, Any] | None = None,
              force_new: bool = False, clock: Clock | None = None,
@@ -38,7 +74,14 @@ def run_algo(platform: PlatformConfig, db: Database, algo_id: str, *, mode: str 
     mode = mode or cfg.mode
     if mode != "paper":
         raise RuntimeError("Live trading is disabled in v1 — only --mode paper is supported.")
+    # Replays never touch a live run, so any number of them may run alongside one.
+    lock = nullcontext() if replay_date else single_instance(platform.data_dir / "locks" / f"{algo_id}.lock")
+    with lock:
+        return _run(platform, db, algo_id, algo_cls, cfg, mode, replay_date, force_new, clock, calendar)
 
+
+def _run(platform: PlatformConfig, db: Database, algo_id: str, algo_cls: type, cfg: Any, mode: str,
+         replay_date: date | None, force_new: bool, clock: Clock | None, calendar: MarketCalendar | None) -> int:
     source = "replay" if replay_date else "live"
     clock = clock or (SimClock(ist(replay_date, REPLAY_START)) if replay_date else LiveClock())
     trade_date = replay_date or clock.today()

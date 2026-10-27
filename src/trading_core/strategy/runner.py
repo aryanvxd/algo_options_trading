@@ -35,7 +35,9 @@ class Runner:
         ctx, algo = self.ctx, self.algo
         sched = algo.cfg.schedule
         steps = [(name, ctx.clock.at(getattr(sched, name), ctx.trade_date)) for name in STEPS]
-        if algo.state in (IN_TRADE, EXITING, DONE):     # resumed after a restart
+        if algo.state == DONE:                          # resumed after the trade had closed: nothing left
+            steps = [("report", ctx.clock.now())]       # to do but the report, so don't wait for 15:35
+        elif algo.state in (IN_TRADE, EXITING):         # resumed after a restart
             steps = [s for s in steps if s[0] not in ("premarket", "entry")]
         log.info("run %s: %s %s (%s, %s)", ctx.run_id, ctx.algo_id, ctx.trade_date, ctx.mode, ctx.source)
 

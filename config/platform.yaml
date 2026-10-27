@@ -27,7 +27,7 @@ charges:
   gst_rate: 0.18                 # on brokerage + exchange txn + SEBI fee
 
 paper:
-  slippage_pts: 0.5              # added against you on every paper fill
+  slippage_pts: 0.1              # added against you on every paper fill (was 0.5; 1 lot usually fills at the touch)
   max_spread_pts: 5.0            # wider than this = order rejected (unless it is a forced exit)
   tick_size: 0.05
 

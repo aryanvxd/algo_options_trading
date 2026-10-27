@@ -5,6 +5,8 @@ Kite access tokens expire every day (around 06:00 IST), so once each morning you
 ``request_token``, exchanges it for an access token and stores it in ``broker_sessions``. Every
 algo process then reads the token from the DB.
 
+``algo logout`` ends the session early: Kite invalidates the token and it is expired in the DB.
+
 Your Kite app's redirect URL must match ``http://<redirect_host>:<redirect_port><redirect_path>``.
 """
 
@@ -17,7 +19,7 @@ from datetime import datetime, time, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from trading_core.clock import IST, Clock
 from trading_core.config import KiteConfig, KiteSecrets
@@ -102,3 +104,25 @@ def login(db: Database, cfg: KiteConfig, secrets: KiteSecrets, clock: Clock, ope
         s.add(row)
     log.info("Kite login OK for %s, token valid until %s", row.user_id, row.valid_until)
     return row
+
+
+def logout(db: Database, secrets: KiteSecrets, clock: Clock) -> int:
+    """Invalidate the active Kite token(s) and expire them in the DB. Returns how many were ended."""
+    from kiteconnect import KiteConnect
+    from kiteconnect import exceptions as kex
+
+    now = clock.now()
+    with db.session() as s:
+        sessions = s.scalars(select(m.BrokerSession).where(m.BrokerSession.valid_until > now)).all()
+        tokens = [x.access_token for x in sessions]
+    kite = KiteConnect(api_key=secrets.api_key)
+    for token in tokens:
+        kite.set_access_token(token)
+        try:
+            kite.invalidate_access_token(token)
+        except kex.TokenException:      # already expired or invalidated: nothing to end at Kite
+            pass
+    with db.session() as s:
+        s.execute(update(m.BrokerSession).where(m.BrokerSession.valid_until > now).values(valid_until=now))
+    log.info("Kite logout: %d session(s) ended", len(tokens))
+    return len(tokens)

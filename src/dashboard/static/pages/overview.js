@@ -8,6 +8,7 @@
     ENTRY_PENDING: ['Waiting for entry', 'tone-amber', true],
     IN_TRADE: ['In trade', 'tone-green', true],
     EXITING: ['Exiting', 'tone-red', true],
+    CLOSED: ['Trade closed', 'tone-blue', true],   // flat, but the process still records ticks until the report
     DONE: ['Done', 'tone-blue', false],
     SKIPPED: ['Skipped', 'tone-slate', false],
     ERROR: ['Error', 'tone-red', false],
@@ -172,8 +173,11 @@
   }
 
   function card(s) {
-    const st = STATUS[s.live_status && ['ENTRY_PENDING', 'EXITING'].includes(s.live_status) ? s.live_status : s.status]
-      || [s.status, 'tone-slate', false];
+    // The run's own status only changes at the report; the live state knows sooner.
+    let key = s.status;
+    if (['ENTRY_PENDING', 'EXITING'].includes(s.live_status)) key = s.live_status;
+    else if (s.live_status === 'DONE' && s.status === 'IN_TRADE') key = 'CLOSED';
+    const st = STATUS[key] || [s.status, 'tone-slate', false];
     const live = st[2] && isLiveView();
     const modeChip = s.mode === 'live' ? chip('Live', 'tone-red', false) : chip('Paper', 'tone-violet', false);
     const traded = s.trades > 0;
