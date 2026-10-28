@@ -14,7 +14,8 @@ Q = {"mode": "paper", "source": "replay"}
 def client(platform, db):
     seed(db, platform, burst(15 * 60, 80, 60))
     run(platform, db)
-    return TestClient(create_app(db, SimClock(ist(DAY, time(16, 0)))))
+    return TestClient(create_app(db, SimClock(ist(DAY, time(16, 0))), platform=platform),
+                      headers={"X-Algo-Desk": "1"})
 
 
 def test_meta_lists_every_strategy_with_its_config(client):

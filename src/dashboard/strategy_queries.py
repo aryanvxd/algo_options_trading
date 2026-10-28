@@ -225,48 +225,83 @@ def _note(n: m.JournalNote) -> dict[str, Any]:
                 tags=n.tags or [], created_at=_iso(n.created_at), updated_at=_iso(n.updated_at))
 
 
-def _pick_run(s, algo_id: str, day: date, mode: str, source: str) -> m.AlgoRun | None:
+def _day_runs(s, algo_id: str, day: date, mode: str, source: str) -> list[m.AlgoRun]:
+    """The runs that make up a day: every live run (their trades add up), or only the newest
+    replay (replays of one day are alternatives)."""
     q = (select(m.AlgoRun).where(m.AlgoRun.algo_id == algo_id, m.AlgoRun.trade_date == day,
-                                 m.AlgoRun.source == source).order_by(m.AlgoRun.run_id.desc()))
-    return s.scalars(_mode(q, m.AlgoRun, mode)).first()
+                                 m.AlgoRun.source == source).order_by(m.AlgoRun.run_id))
+    runs = list(s.scalars(_mode(q, m.AlgoRun, mode)).all())
+    return runs if source == "live" else runs[-1:]
+
+
+def _run_info(r: m.AlgoRun, trades: int) -> dict[str, Any]:
+    cfg = r.config_snapshot or {}
+    return dict(run_id=r.run_id, status=r.status, mode=r.mode, source=r.source, skip_reason=r.skip_reason,
+                started_at=_iso(r.started_at), ended_at=_iso(r.ended_at), version=cfg.get("version"),
+                lots=cfg.get("lots"), max_trades=cfg.get("max_trades", 1), capital=cfg.get("capital"), trades=trades)
+
+
+def _primary(runs: list[m.AlgoRun], traded_ids: set[int]) -> m.AlgoRun:
+    """The run that speaks for the day: one still going, else the newest that traded, else the newest."""
+    active = [r for r in runs if r.status in ("STARTED", "IN_TRADE")]
+    traded = [r for r in runs if r.run_id in traded_ids]
+    return (active or traded or runs)[-1]
 
 
 def strategy_day(db: Database, algo_id: str, day: date, mode: str = "paper", source: str = "live") -> dict[str, Any]:
     with db.session() as s:
-        run = _pick_run(s, algo_id, day, mode, source)
         notes = [_note(n) for n in s.scalars(select(m.JournalNote).where(
             m.JournalNote.algo_id == algo_id, m.JournalNote.trade_date == day).order_by(m.JournalNote.id))]
-        if run is None:
-            return dict(algo_id=algo_id, date=_iso(day), run=None, trades=[], checks=[], events=[], notes=notes)
+        runs = _day_runs(s, algo_id, day, mode, source)
+        if not runs:
+            return dict(algo_id=algo_id, date=_iso(day), run=None, runs=[], trades=[], checks=[], events=[],
+                        notes=notes)
+        run_ids = [r.run_id for r in runs]
         found = _positions(s, select(m.Position, m.AlgoRun).join(m.AlgoRun, m.AlgoRun.run_id == m.Position.run_id)
-                           .where(m.Position.run_id == run.run_id).order_by(m.Position.position_id))
+                           .where(m.Position.run_id.in_(run_ids)).order_by(m.Position.position_id))
+        per_run: dict[int, int] = defaultdict(int)
+        for p, _ in found:
+            per_run[p.run_id] += 1
+        primary = _primary(runs, set(per_run))
         curves = _snapshots(s, [p.position_id for p, _ in found])
-        live = s.get(m.LiveState, run.run_id)
-        summary = s.get(m.DailySummary, run.run_id)
-        checks = [_check(c) for c in s.scalars(select(m.RunCheck).where(m.RunCheck.run_id == run.run_id)
-                                               .order_by(m.RunCheck.id))]
-        events = [_event(e) for e in s.scalars(select(m.Event).where(m.Event.run_id == run.run_id)
-                                               .order_by(m.Event.id))]
+        lives = {ls.run_id: ls for ls in s.scalars(select(m.LiveState).where(m.LiveState.run_id.in_(run_ids)))}
+        live = lives.get(primary.run_id)
+        summaries = list(s.scalars(select(m.DailySummary).where(m.DailySummary.run_id.in_(run_ids))))
+        checks = [dict(_check(c), run_id=c.run_id) for c in s.scalars(
+            select(m.RunCheck).where(m.RunCheck.run_id.in_(run_ids)).order_by(m.RunCheck.id))]
+        events = [dict(_event(e), run_id=e.run_id) for e in s.scalars(
+            select(m.Event).where(m.Event.run_id.in_(run_ids)).order_by(m.Event.id))]
         trades_out = []
-        for p, r in found:
+        for n, (p, r) in enumerate(found, 1):
             row = _trade_row(p, r)
-            if p.status in ("OPEN", "OPENING") and live is not None and live.gross_pnl is not None:
-                row.update(gross=_r(live.gross_pnl), net=_r(live.net_pnl), open=True,
-                           roi_pct=_r((live.net_pnl or 0) / row["capital"] * 100, 3) if row["capital"] else None)
+            row["trade_no"] = n                    # numbered across the day's runs
+            ls = lives.get(p.run_id)
+            if p.status in ("OPEN", "OPENING") and ls is not None and ls.gross_pnl is not None:
+                row.update(gross=_r(ls.gross_pnl), net=_r(ls.net_pnl), open=True,
+                           roi_pct=_r((ls.net_pnl or 0) / row["capital"] * 100, 3) if row["capital"] else None)
             trades_out.append(dict(**row, legs=_legs(p), curve=curves.get(p.position_id, [])))
-        cfg = run.config_snapshot or {}
+
+        def total(field: str) -> float | None:
+            vals = [getattr(x, field) for x in summaries if getattr(x, field) is not None]
+            return _r(sum(vals)) if vals else None
+
+        best = [x.max_profit for x in summaries if x.max_profit is not None]
+        worst = [x.max_drawdown for x in summaries if x.max_drawdown is not None]
+        run = _run_info(primary, per_run.get(primary.run_id, 0))
+        if not trades_out and len(runs) > 1:
+            run["skip_reason"] = "; ".join(f"run #{r.run_id}: {r.skip_reason}" for r in runs if r.skip_reason) or None
+        elif trades_out:
+            run["skip_reason"] = None          # a later run that found nothing to do doesn't make the day "skipped"
         return dict(
-            algo_id=algo_id, date=_iso(day),
-            run=dict(run_id=run.run_id, status=run.status, mode=run.mode, source=run.source,
-                     skip_reason=run.skip_reason, started_at=_iso(run.started_at), ended_at=_iso(run.ended_at),
-                     version=cfg.get("version"), lots=cfg.get("lots"), max_trades=cfg.get("max_trades", 1),
-                     capital=cfg.get("capital")),
+            algo_id=algo_id, date=_iso(day), run=run,
+            runs=[_run_info(r, per_run.get(r.run_id, 0)) for r in runs],
             live=dict(status=live.status, updated_at=_iso(live.updated_at), spot=live.spot, vix=live.vix,
                       gross=_r(live.gross_pnl), net=_r(live.net_pnl), net_premium=live.net_premium,
                       legs=live.legs, levels=live.levels, feed_ok=live.feed_ok) if live else None,
-            summary=dict(gross=_r(summary.gross_pnl), charges=_r(summary.charges), net=_r(summary.net_pnl),
-                         max_profit=_r(summary.max_profit), max_drawdown=_r(summary.max_drawdown),
-                         exit_reason=summary.exit_reason, notes=summary.notes) if summary else None,
+            summary=dict(gross=total("gross_pnl"), charges=total("charges"), net=total("net_pnl"),
+                         max_profit=_r(max(best)) if best else None, max_drawdown=_r(min(worst)) if worst else None,
+                         exit_reason=",".join(x.exit_reason for x in summaries if x.exit_reason) or None,
+                         notes="; ".join(x.notes for x in summaries if x.notes) or None) if summaries else None,
             trades=trades_out, checks=checks, events=events, notes=notes)
 
 
@@ -372,18 +407,30 @@ def journal(db: Database, algo_id: str, start: date, end: date, mode: str = "pap
                            .order_by(m.JournalNote.id)):
             notes[n.trade_date.isoformat()].append(_note(n))
 
-    seen: set[str] = set()
+    # Live runs of one day add up; of several replays of a day only the newest counts.
+    by_day: dict[str, list[m.AlgoRun]] = defaultdict(list)
+    for r in sorted(runs, key=lambda r: r.run_id):
+        by_day[r.trade_date.isoformat()].append(r)
     days = []
-    for r in runs:
-        d = r.trade_date.isoformat()
-        if d in seen:                 # several replays of one day: the newest run speaks for it
-            continue
-        seen.add(d)
-        sm = summaries.get(r.run_id)
-        days.append(dict(date=d, weekday=WEEKDAYS[r.trade_date.weekday()], run_id=r.run_id, status=r.status,
-                         skip_reason=r.skip_reason, net=_r(sm.net_pnl) if sm else None,
-                         summary_notes=sm.notes if sm else None, checks=checks[r.run_id],
-                         events=events[r.run_id], trades=positions[r.run_id], notes=notes.pop(d, [])))
+    for d, day_runs in by_day.items():
+        if source != "live":
+            day_runs = day_runs[-1:]
+        traded = {r.run_id for r in day_runs if positions[r.run_id]}
+        primary = _primary(day_runs, traded)
+        sms = [summaries[r.run_id] for r in day_runs if r.run_id in summaries]
+        nets = [x.net_pnl for x in sms if x.net_pnl is not None]
+        day_trades = [t for r in day_runs for t in positions[r.run_id]]
+        for n, t in enumerate(day_trades, 1):
+            t["trade_no"] = n
+        days.append(dict(
+            date=d, weekday=WEEKDAYS[date.fromisoformat(d).weekday()], run_id=primary.run_id, status=primary.status,
+            runs=[_run_info(r, len(positions[r.run_id])) for r in day_runs],
+            skip_reason=None if day_trades else "; ".join(r.skip_reason for r in day_runs if r.skip_reason) or None,
+            net=_r(sum(nets)) if nets else None,
+            summary_notes="; ".join(x.notes for x in sms if x.notes) or None,
+            checks=[c for r in day_runs for c in checks[r.run_id]],
+            events=[e for r in day_runs for e in events[r.run_id]],
+            trades=day_trades, notes=notes.pop(d, [])))
     for d, ns in notes.items():       # notes on days the algo did not run
         days.append(dict(date=d, weekday=WEEKDAYS[date.fromisoformat(d).weekday()], run_id=None, status=None,
                          skip_reason=None, net=None, summary_notes=None, checks=[], events=[], trades=[], notes=ns))

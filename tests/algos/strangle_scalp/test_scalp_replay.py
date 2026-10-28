@@ -111,6 +111,16 @@ def test_flat_day_never_trades_and_is_skipped(platform, db):
     assert positions(db, run_id) == []
 
 
+def test_wednesday_is_not_a_trade_day(platform, db):
+    from datetime import date as d
+
+    InstrumentStore(db, platform.instruments).save_snapshot(d(2026, 10, 28), instrument_rows(d(2026, 11, 3)))
+    run_id = run_algo(platform, db, "strangle_scalp", replay_date=d(2026, 10, 28), calendar=CAL)
+    with db.session() as s:
+        r = s.get(m.AlgoRun, run_id)
+    assert r.status == "SKIPPED" and r.skip_reason == "Wed: trades only on Mon, Tue"
+
+
 def test_two_losing_trades_in_a_row_stop_the_day(platform, db):
     # Short bursts that fade straight back: each is bought near the top, then the move dies and the
     # stall exit sells it at a loss. The third burst must not be traded.

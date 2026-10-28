@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from contextlib import contextmanager, nullcontext
-from datetime import date, time
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -60,7 +61,13 @@ def single_instance(path: Path) -> Iterator[None]:
         except OSError:
             raise AlreadyRunning(f"another `algo run` for this algo is already running (lock: {path}). "
                                  "Close it first, or use `algo kill` to stop it.") from None
-        yield
+        # Who holds the lock, for the dashboard (it checks the process, never the lock itself).
+        pid_file = path.with_suffix(".pid")
+        pid_file.write_text(json.dumps(dict(pid=os.getpid(), started_at=datetime.now().astimezone().isoformat())))
+        try:
+            yield
+        finally:
+            pid_file.unlink(missing_ok=True)
     finally:
         f.close()
 

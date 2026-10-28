@@ -32,8 +32,13 @@ file"), use the wrapper in the repo root instead: `.\algo.cmd <command>` (or
 ```
 
 Each algo runs in its own window (Kite allows 3 WebSocket connections per API key). The iron
-condor trades only on expiry day and the 2 trading days before it; the scalp trades every day,
-up to 3 trades, and records the book every second while it runs. After pulling new code, run
+condor trades every trading day; the scalp trades Mondays and Tuesdays, up to 3 trades, and
+records the book every second while it runs. Instead of typing `algo run`, you can press
+**Start** for a strategy on the dashboard (Overview, or the strategy's page): it opens the same
+command in its own window, which keeps running if the dashboard is closed. **Stop** squares off
+and stops it, like `algo kill`. The dashboard's **Log in** button opens `algo login`. Start is
+greyed out once a strategy has finished for the day, after its square-off time, or while Kite
+isn't logged in. After pulling new code, run
 `.venv/Scripts/algo db upgrade` once (it adds new columns/tables; existing data is kept).
 
 Leave `algo run` running. On non-trade days (outside the expiry window, VIX ≥ 20, CE/PE premiums

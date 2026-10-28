@@ -3,8 +3,8 @@
 
 algo_id: iron_condor
 name: NIFTY Short Iron Condor
-version: "0.2.1"
-description: Sell OTM CE+PE, buy further-OTM hedges; expiry day and the 2 trading days before it.
+version: "0.3.0"
+description: Sell OTM CE+PE, buy further-OTM hedges; every trading day of the weekly expiry cycle.
 mode: paper            # live is disabled in v1
 lots: 2                # 27 Oct 2026: 1 -> 2 (charges are mostly flat ₹20/order: ~₹195 vs ~₹192 per trade)
 
@@ -12,12 +12,13 @@ underlying: NIFTY
 index_symbol: "NIFTY 50"
 vix_symbol: "INDIA VIX"
 strike_step: 50
-trade_window_days: 3   # expiry day + 2 trading days before (normally Fri, Mon, Tue)
+trade_window_days: 5   # 28 Oct 2026: 3 -> 5 = every trading day (expiry day + the 4 before it, Wed-Tue)
 
 # Gap between the two shorts, centred on ATM, keyed by trading days to expiry.
-width_by_dte: {0: 500, 1: 550, 2: 600}
+# 3-4 DTE (Wed, Thu) reuse the 2-DTE shape for now; widen them if the paper days say so.
+width_by_dte: {0: 500, 1: 550, 2: 600, 3: 600, 4: 600}
 # Distance from each short to its hedge.
-hedge_by_dte: {0: 200, 1: 250, 2: 300}
+hedge_by_dte: {0: 200, 1: 250, 2: 300, 3: 300, 4: 300}
 subscribe_buffer_pts: 200   # extra strikes subscribed beyond the hedges, in case spot moves before entry
 
 # Checked at entry time (no pre-open checks: the laptop is switched on at ~09:35).

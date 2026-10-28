@@ -83,46 +83,78 @@ def overview(db: Database, day: date, mode: str = "paper", source: str = "live")
         charges_by_leg = _charges_by_leg(s, run_ids) if run_ids else {}
         intraday = _intraday(s, [p.position_id for p in positions])
 
+    # One card per strategy: a live day can have several runs (a restart after the process finished,
+    # --force-new, ...), whose trades and P&L add up; the runs themselves are listed too. Replays of
+    # the same day are alternatives, not additions, so each replay keeps its own card.
+    by_algo: dict[Any, list[tuple[m.AlgoRun, str]]] = defaultdict(list)
+    for run, name in runs:
+        by_algo[run.algo_id if run.source == "live" else (run.algo_id, run.run_id)].append((run, name))
+
     strategies = []
     totals = dict(gross=0.0, charges=0.0, net=0.0, open_net=0.0, trades=0, open_positions=0)
-    for run, name in runs:
-        ls = live.get(run.run_id)
+    for key, algo_runs in by_algo.items():
+        algo_id = algo_runs[0][0].algo_id
         gross = charges = net = 0.0
         known = True
         trades, open_count, exits, series = 0, 0, [], []
-        for p in by_run.get(run.run_id, []):
-            if not any(l.entry_price is not None for l in p.legs):
-                continue            # rejected before any fill: nothing traded
-            pnl = _position_pnl(p, charges_by_leg, ls)
-            trades += 1
-            if pnl["open"]:
-                open_count += 1
-                totals["open_net"] += pnl["net"] or 0.0
-            if pnl["net"] is None:
-                known = False
-                continue
-            gross += pnl["gross"]
-            charges += pnl["charges"]
-            net += pnl["net"]
-            if p.exit_reason:
-                exits.append(p.exit_reason)
-            series.extend(intraday.get(p.position_id, []))
+        first = None
+        run_rows = []
+        best = worst = None
+        for run, _ in algo_runs:
+            ls = live.get(run.run_id)
+            run_trades = 0
+            for p in by_run.get(run.run_id, []):
+                if not any(l.entry_price is not None for l in p.legs):
+                    continue            # rejected before any fill: nothing traded
+                pnl = _position_pnl(p, charges_by_leg, ls)
+                trades += 1
+                run_trades += 1
+                if first is None and p.entry_credit_pts is not None:
+                    first = p
+                if pnl["open"]:
+                    open_count += 1
+                    totals["open_net"] += pnl["net"] or 0.0
+                if pnl["net"] is None:
+                    known = False
+                    continue
+                gross += pnl["gross"]
+                charges += pnl["charges"]
+                net += pnl["net"]
+                if p.exit_reason:
+                    exits.append(p.exit_reason)
+                series.extend(intraday.get(p.position_id, []))
+            summary = summaries.get(run.run_id)
+            if summary is not None and summary.max_profit is not None:
+                best = summary.max_profit if best is None else max(best, summary.max_profit)
+            if summary is not None and summary.max_drawdown is not None:
+                worst = summary.max_drawdown if worst is None else min(worst, summary.max_drawdown)
+            run_rows.append(dict(run_id=run.run_id, status=run.status, live_status=ls.status if ls else None,
+                                 skip_reason=run.skip_reason, trades=run_trades,
+                                 started_at=run.started_at.isoformat(),
+                                 ended_at=run.ended_at.isoformat() if run.ended_at else None))
 
-        first = next((p for p in by_run.get(run.run_id, []) if p.entry_credit_pts is not None), None)
-        summary = summaries.get(run.run_id)
+        # The card speaks for the run that is still going, else the newest run that traded, else the newest.
+        active = [r for r, _ in algo_runs if r.status in ("STARTED", "IN_TRADE")]
+        traded = [r for r, _ in algo_runs if any(x["run_id"] == r.run_id and x["trades"] for x in run_rows)]
+        primary = (active or traded or [r for r, _ in algo_runs])[-1]
+        ls = live.get(primary.run_id)
+        status = primary.status
+        skip_reason = primary.skip_reason if not trades else None
+        series.sort(key=lambda pt: pt[0])
         strategies.append(dict(
-            run_id=run.run_id, algo_id=run.algo_id, name=name, mode=run.mode, status=run.status,
-            live_status=ls.status if ls else None, skip_reason=run.skip_reason,
+            run_id=primary.run_id, algo_id=algo_id, name=algo_runs[0][1], mode=primary.mode, status=status,
+            live_status=ls.status if ls else None, skip_reason=skip_reason,
+            runs=run_rows, run_count=len(run_rows),
             trades=trades, open_positions=open_count,
             gross=_r(gross) if trades else None, charges=_r(charges) if trades else None,
             net=_r(net) if trades and known else None,
             entry_credit=first.entry_credit_pts if first else None,
             exit_reason=", ".join(exits) or None,
-            max_profit=_r(summary.max_profit) if summary else None,
-            max_drawdown=_r(summary.max_drawdown) if summary else None,
+            max_profit=_r(best), max_drawdown=_r(worst),
             spot=ls.spot if ls else None, vix=ls.vix if ls else None,
             updated_at=ls.updated_at.isoformat() if ls else None,
-            started_at=run.started_at.isoformat(), ended_at=run.ended_at.isoformat() if run.ended_at else None,
+            started_at=algo_runs[0][0].started_at.isoformat(),
+            ended_at=primary.ended_at.isoformat() if primary.ended_at else None,
             intraday=series,
         ))
         if trades and known:
@@ -133,9 +165,9 @@ def overview(db: Database, day: date, mode: str = "paper", source: str = "live")
         totals["open_positions"] += open_count
 
     totals = {k: _r(v) if isinstance(v, float) else v for k, v in totals.items()}
-    totals.update(strategies=len(strategies),
+    totals.update(strategies=len(strategies), runs=sum(x["run_count"] for x in strategies),
                   traded=sum(1 for x in strategies if x["trades"]),
-                  skipped=sum(1 for x in strategies if x["status"] == "SKIPPED"),
+                  skipped=sum(1 for x in strategies if x["status"] == "SKIPPED" and not x["trades"]),
                   running=sum(1 for x in strategies if x["status"] in ("STARTED", "IN_TRADE")))
     return dict(date=day.isoformat(), mode=mode, source=source, totals=totals, strategies=strategies)
 

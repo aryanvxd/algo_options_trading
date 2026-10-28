@@ -22,8 +22,9 @@ const App = (() => {
     const url = '/api/' + path + (qs.toString() ? '?' + qs : '');
     const dot = document.getElementById('conn-dot');
     try {
-      const res = await fetch(url, { cache: 'no-store', method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      const headers = method === 'GET' ? {} : { 'X-Algo-Desk': '1' };    // the server accepts writes only with it
+      if (body) headers['Content-Type'] = 'application/json';
+      const res = await fetch(url, { cache: 'no-store', method, headers,
         body: body ? JSON.stringify(body) : undefined });
       if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
       dot.className = 'conn-dot ok';

@@ -30,6 +30,7 @@ class Runner:
         self._last_poll: datetime | None = None
         self._last_live_state: datetime | None = None
         self._last_record: datetime | None = None
+        self.started_at = self.ctx.clock.now()      # control commands older than this are stale
 
     def run(self) -> str:
         ctx, algo = self.ctx, self.algo
@@ -136,9 +137,10 @@ class Runner:
     def _service(self, now: datetime) -> None:
         ctx, algo = self.ctx, self.algo
 
-        if self._due(self._last_poll, now, self.rt.control_poll_interval_s):
+        # Replays never read control commands: a kill is meant for the live process.
+        if not ctx.is_replay and self._due(self._last_poll, now, self.rt.control_poll_interval_s):
             self._last_poll = now
-            for cmd in ctx.journal.pending_commands(ctx.algo_id, ctx.run_id, now):
+            for cmd in ctx.journal.pending_commands(ctx.algo_id, ctx.run_id, now, since=self.started_at):
                 log.warning("control command: %s", cmd)
                 if cmd == "KILL":
                     algo.request_kill("manual (control command)")

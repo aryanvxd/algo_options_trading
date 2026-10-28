@@ -322,3 +322,16 @@ details.spec summary { cursor: pointer; font-size: 0.86rem; display: flex; gap: 
   .modal-body { padding: 16px; }
   .page-header .header-meta { width: 100%; }
 }
+
+/* ── Run control (Start / Stop) ────────────────────────────────────────────── */
+.control-card:empty { display: none; }
+.control-card { margin-bottom: 14px; }
+.control-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); }
+.control-bar.compact { background: none; border: 0; box-shadow: none; padding: 0; }
+.control-kite, .control-row { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.control-name { font-size: 0.84rem; font-weight: 600; color: var(--text); }
+.btn-danger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.82rem; font-weight: 500;
+  border-radius: 8px; background: var(--loss); color: #fff; padding: 7px 14px; }
+.btn-danger:hover { background: #dc2626; }
+.btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }

@@ -13,7 +13,16 @@ def report_dir(reports_dir: Path, summary: dict[str, Any]) -> Path:
     name = summary["trade_date"].isoformat()
     if summary["source"] != "live":
         name += f"_replay_{summary['run_id']}"
-    return reports_dir / summary["algo_id"] / name
+    out = reports_dir / summary["algo_id"] / name
+    # A second live run on the same day gets its own folder instead of overwriting the first's report.
+    if summary["source"] == "live" and (out / "summary.json").exists():
+        try:
+            other = json.loads((out / "summary.json").read_text(encoding="utf-8")).get("run_id")
+        except (OSError, ValueError):
+            other = None
+        if other not in (None, summary["run_id"]):
+            out = out.with_name(f"{name}_run{summary['run_id']}")
+    return out
 
 
 def write_report(reports_dir: Path, summary: dict[str, Any], trades: list[Position]) -> Path:

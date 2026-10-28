@@ -1,8 +1,9 @@
 """Local dashboard: FastAPI serving a JSON API and a static, build-free frontend.
 
 It reads the database the algos write (the same SQLite file), so it can be started and stopped at
-any time without affecting a running algo. Its only writes are your journal notes, to a table no
-algo reads. Run it with ``algo dashboard``.
+any time without affecting a running algo. It writes only your journal notes (a table no algo
+reads) and, when you press Start / Stop, launches `algo run` in its own window or sends the same
+KILL as `algo kill`. Run it with ``algo dashboard``.
 """
 
 from __future__ import annotations
@@ -15,10 +16,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from dashboard import queries
+from dashboard import control, queries
 from dashboard import strategy_queries as sq
 from trading_core import __version__
 from trading_core.clock import Clock, LiveClock
+from trading_core.config import PlatformConfig, load_platform_config
 from trading_core.db.engine import Database
 
 STATIC = Path(__file__).parent / "static"
@@ -44,9 +46,28 @@ class NoteIn(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
-def create_app(db: Database, clock: Clock | None = None) -> FastAPI:
+WRITE_HEADER = "X-Algo-Desk"
+LOCAL_ORIGINS = ("http://127.0.0.1", "http://localhost")
+
+
+def create_app(db: Database, clock: Clock | None = None, platform: PlatformConfig | None = None,
+               launcher: control.Launcher | None = None) -> FastAPI:
     clock = clock or LiveClock()
+    platform = platform or load_platform_config()
+    launcher = launcher or control.launch_console
     app = FastAPI(title="Algo dashboard", version=__version__, docs_url="/api/docs", redoc_url=None)
+
+    @app.middleware("http")
+    async def same_page_writes_only(request, call_next):
+        # Anything that writes or starts a process must come from this dashboard's own page: a
+        # custom header forces a CORS preflight, which another site open in the browser can't pass.
+        if request.method in ("POST", "PUT", "DELETE"):
+            origin = request.headers.get("origin")
+            if request.headers.get(WRITE_HEADER) != "1" or (origin and not origin.startswith(LOCAL_ORIGINS)):
+                from fastapi.responses import JSONResponse
+
+                return JSONResponse({"detail": "writes are only accepted from the dashboard page"}, status_code=403)
+        return await call_next(request)
 
     @app.middleware("http")
     async def revalidate_static(request, call_next):
@@ -127,6 +148,29 @@ def create_app(db: Database, clock: Clock | None = None) -> FastAPI:
     def api_delete_note(note_id: int):
         if not sq.delete_note(db, note_id):
             raise HTTPException(404, "no such note")
+
+    # Run control: Start opens `algo run` in its own window; Stop sends KILL (square off, then stop).
+    @app.get("/api/control")
+    def api_control():
+        return control.status(platform, db, clock.now())
+
+    @app.post("/api/strategies/{algo_id}/start")
+    def api_start(algo_id: str):
+        try:
+            return control.start(platform, db, _known(algo_id), clock.now(), launcher)
+        except control.ControlError as e:
+            raise HTTPException(409, str(e)) from None
+
+    @app.post("/api/strategies/{algo_id}/stop")
+    def api_stop(algo_id: str):
+        try:
+            return control.stop(platform, db, _known(algo_id), clock.now())
+        except control.ControlError as e:
+            raise HTTPException(409, str(e)) from None
+
+    @app.post("/api/kite/login")
+    def api_login():
+        return control.login(platform, launcher)
 
     def _known(algo_id: str) -> str:
         if algo_id not in {a["algo_id"] for a in sq.strategy_list(db)}:

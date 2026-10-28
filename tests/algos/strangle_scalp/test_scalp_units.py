@@ -99,6 +99,21 @@ def test_signal_needs_three_rising_windows_a_big_enough_rise_and_a_futures_move(
     assert not st.fired and st.windows_up == 2            # the oldest window was flat
 
 
+def test_signal_without_the_futures_condition_fires_on_the_pair_alone():
+    sig = PairSignal(SignalConfig())
+    feed_signal(sig, [40 + 0.1 * i for i in range(16)], fut_step=0.0)   # NIFTY futures flat
+    assert sig.evaluate(T0, min_move=0).fired
+    assert not sig.evaluate(T0, min_move=12).fired
+    assert sig.evaluate(T0, min_move=0).fut_move == 0                     # still reported
+
+
+def test_config_yaml_trades_mondays_and_tuesdays_without_the_futures_condition():
+    from trading_core.strategy import registry
+
+    _, cfg = registry.load("strangle_scalp")
+    assert cfg.trade_weekdays == ["Mon", "Tue"] and cfg.signal.require_fut_move is False
+
+
 def test_signal_not_ready_without_history():
     sig = PairSignal(SignalConfig())
     feed_signal(sig, [40, 41, 42])

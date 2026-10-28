@@ -1,8 +1,9 @@
 """NIFTY long strangle scalp (paper, spec: docs/strategy-criteria/long-strangle-scalp.md).
 
-Day: every trading day -> subscribe NIFTY, India VIX, NIFTY futures and strikes around spot ->
-from 09:45 watch an OTM call/put pair (₹15-30 premium on expiry day, delta ~0.30 otherwise) ->
-buy both when the pair's value keeps rising with a real NIFTY move -> exits every second (kill,
+Day: Mondays and Tuesdays (``trade_weekdays``) -> subscribe NIFTY, India VIX, NIFTY futures and
+strikes around spot -> from 09:45 watch an OTM call/put pair (₹15-30 premium on expiry day, delta
+~0.30 otherwise) -> buy both when the pair's value keeps rising (the futures move is logged, and
+required only with ``signal.require_fut_move``) -> exits every second (kill,
 stale feed, stop, day loss, target, trailing stop, stall, max hold, 10:45) -> after a 3-minute
 cool-down look for the next one: at most 3 trades, entries until 10:30, stop after 2 losses in a
 row or the day-loss limit.
@@ -15,7 +16,7 @@ from typing import Any
 
 from algos.strangle_scalp.entry_signal import PairSignal
 from algos.strangle_scalp.pair_selector import Pair, mid, quote_ok, select_pair
-from algos.strangle_scalp.settings import StrangleScalpConfig
+from algos.strangle_scalp.settings import WEEKDAYS, StrangleScalpConfig
 from trading_core.broker.base import BUY
 from trading_core.kite.instruments import InstrumentInfo
 from trading_core.risk.engine import ExitRule
@@ -63,7 +64,10 @@ class StrangleScalpAlgo(BaseAlgo):
 
     @property
     def min_move(self) -> float:
+        """Futures move the signal needs (0 = not required)."""
         s = self.cfg.signal
+        if not s.require_fut_move:
+            return 0.0
         return s.min_fut_move_pts_0dte if self.dte == 0 else s.min_fut_move_pts
 
     def build_exit_rules(self) -> list[ExitRule]:
@@ -144,11 +148,15 @@ class StrangleScalpAlgo(BaseAlgo):
         if not ctx.calendar.is_trading_day(d):
             self.check("trade_day", False, detail="weekend or exchange holiday")
             raise SkipDay("market closed today")
+        weekday = WEEKDAYS[d.weekday()]
+        if weekday not in cfg.trade_weekdays:
+            self.check("trade_day", False, weekday=weekday, trade_weekdays=cfg.trade_weekdays)
+            raise SkipDay(f"{weekday}: trades only on {', '.join(cfg.trade_weekdays)}")
         expiry = ctx.instruments.nearest_expiry(cfg.underlying, d)
         if expiry is None:
             raise SkipDay(f"no {cfg.underlying} option expiry found in instrument snapshot")
         self.expiry, self.dte = expiry, ctx.calendar.trading_days_until(d, expiry)
-        self.check("trade_day", True, value=self.dte, expiry=str(expiry))
+        self.check("trade_day", True, value=self.dte, expiry=str(expiry), weekday=weekday)
         self.chain = ctx.instruments.option_chain(cfg.underlying, expiry, d)
         if not self.chain:
             raise SkipDay(f"empty option chain for {expiry}")

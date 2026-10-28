@@ -1,9 +1,9 @@
 # NIFTY long strangle scalp
 
-- **Status:** v0.1 implemented in `src/algos/strangle_scalp/` (config version 0.1.0, 27 Oct 2026).
+- **Status:** v0.2 implemented in `src/algos/strangle_scalp/` (config version 0.2.0, 28 Oct 2026).
   The thresholds marked *(proposed)* are starting points, to be tuned from the paper days' logs.
-- **Mode:** paper, 1 lot, every trading day from 28 Oct 2026.
-- **Last changed:** 27 Oct 2026.
+- **Mode:** paper, 1 lot, Mondays and Tuesdays (from 28 Oct 2026; first paper day was Wed 28 Oct).
+- **Last changed:** 28 Oct 2026 — Mon/Tue only, futures-move condition (S4) off. See section 11.
 
 ## 1. Idea
 
@@ -25,7 +25,7 @@ caps how much we lose if NIFTY reverses.
 |---|---|
 | Underlying | NIFTY 50 weekly options, nearest expiry |
 | Lot size | read from Kite's instrument list each day (65 at the time of writing) |
-| Trade days | **every trading day** (decided 27 Oct 2026). The pair is picked by premium on expiry day and by delta on other days (section 4.1) |
+| Trade days | **Mondays and Tuesdays** (decided 28 Oct 2026; was every trading day): Monday is normally 1 DTE (pair by delta), Tuesday is expiry day (pair by premium, section 4.1). Config `trade_weekdays` |
 | Trades per day | **at most 3** |
 | Entry window | **09:45–10:30** |
 
@@ -107,10 +107,10 @@ jumps between bid and ask and would fake a signal.
 | S1 | Rise in each window | `V(t) − V(t − 5 s) > 0` | window **5 s** |
 | S2 | Persistence | S1 true for N windows in a row, checked every second | **N = 3** (≈15 s) |
 | S3 | Size of the rise | `V(now) − V(15 s ago)`, as a share of V | **≥ 2%** (0.8 pts on a ₹40 pair, 1.5 pts on a ₹75 one) |
-| S4 | Real move, not noise | NIFTY futures moved in the same 15 s, either way | **≥ 12 pts** on 0 DTE, **≥ 18 pts** on 1+ DTE (a dearer pair needs a bigger move) |
+| S4 | Real move, not noise — **off since 28 Oct 2026** | NIFTY futures moved in the same 15 s, either way. Still logged with every signal; on again with `signal.require_fut_move: true` | was **≥ 12 pts** on 0 DTE, **≥ 18 pts** on 1+ DTE |
 | S5 | One leg drives it | the gaining leg's rise is larger than the losing leg's fall | always true when V rises; logged as the direction |
 
-All of S1–S4 must be true at the same moment. Then check the entry cost: buy at **ask**, so
+S1–S3 must be true at the same moment (and S4 when it is switched on). Then check the entry cost: buy at **ask**, so
 `ask_CE + ask_PE − V` must be at most half the P4 spread limit, summed over both legs. If that
 fails, skip the signal.
 
@@ -261,6 +261,14 @@ Two behaviours added while testing on recorded data:
   more, so the stop and target in points would change.
 
 ## 11. Decisions and open questions
+
+Decided 28 Oct 2026, after the first paper day:
+
+- **Trade days: Mondays and Tuesdays only** (`trade_weekdays: [Mon, Tue]`). The 2–4 DTE days
+  (Wed–Fri) need a big move for a dearer, IV-heavy pair (section 2); Monday (1 DTE) and Tuesday
+  (expiry) are where a burst pays.
+- **S4 (NIFTY futures move) removed from the entry**: it lagged the pair's own rise and delayed
+  the entry. The move is still logged with each signal, so it can be judged later.
 
 Decided 27 Oct 2026:
 

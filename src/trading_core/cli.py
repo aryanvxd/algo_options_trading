@@ -149,7 +149,7 @@ def cmd_dashboard(args: argparse.Namespace, platform: PlatformConfig) -> int:
 
         threading.Timer(1.0, webbrowser.open, [url]).start()
     # Bound to localhost only: the dashboard has no login.
-    uvicorn.run(create_app(_db(platform)), host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(create_app(_db(platform), platform=platform), host="127.0.0.1", port=port, log_level="warning")
     return 0
 
 

@@ -226,8 +226,12 @@ class Journal:
                 s.execute(insert(m.TickSnapshot), rows)
         return len(rows)
 
-    def pending_commands(self, algo_id: str, run_id: int, now: datetime) -> list[str]:
-        """Return and consume unconsumed commands for this algo (either run-specific or algo-wide)."""
+    def pending_commands(self, algo_id: str, run_id: int, now: datetime,
+                         since: datetime | None = None) -> list[str]:
+        """Return and consume unconsumed commands for this algo (either run-specific or algo-wide).
+
+        Commands issued before ``since`` (when this process started) are consumed without being
+        returned: an ``algo kill`` sent while nothing was running must not stop the next run."""
         with self.db.session() as s:
             rows = s.scalars(
                 select(m.ControlCommand)
@@ -237,7 +241,7 @@ class Journal:
             ).all()
             for r in rows:
                 r.consumed_at = now
-            return [r.command for r in rows]
+            return [r.command for r in rows if since is None or r.issued_at >= since]
 
     def issue_command(self, algo_id: str, command: str, now: datetime, run_id: int | None = None,
                       issued_by: str = "cli") -> None:

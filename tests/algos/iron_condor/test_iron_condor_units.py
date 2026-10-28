@@ -125,6 +125,15 @@ def test_config_yaml_schedule_starts_after_office_arrival():
     assert cfg.filters.vix_max == 20 and cfg.filters.max_premium_ratio == 1.5
 
 
+def test_config_yaml_trades_every_day_of_the_weekly_cycle():
+    from trading_core.strategy import registry
+
+    _, cfg = registry.load("iron_condor")
+    assert cfg.trade_window_days == 5                       # expiry day + the 4 trading days before it
+    assert [cfg.width_for(d) for d in range(5)] == [500, 550, 600, 600, 600]
+    assert [cfg.hedge_for(d) for d in range(5)] == [200, 250, 300, 300, 300]
+
+
 def test_premium_blowout():
     legs = [Leg("LONG_PE", 1, "a", BUY, 65, entry_price=2.0), Leg("LONG_CE", 2, "b", BUY, 65, entry_price=2.0),
             Leg("SHORT_PE", 3, "c", SELL, 65, entry_price=10.0), Leg("SHORT_CE", 4, "d", SELL, 65, entry_price=10.0)]

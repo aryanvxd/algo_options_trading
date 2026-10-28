@@ -478,6 +478,10 @@ class BaseAlgo(ABC):
             self.state = DONE
         self.ctx.journal.set_run_status(self.ctx.run_id, "SKIPPED" if self.skip_reason else "DONE", now,
                                         ended=True)
+        try:        # last live state says the run is over (else it keeps its last "waiting for entry")
+            self.write_live_state(now)
+        except Exception:  # noqa: BLE001 - the report matters more than the dashboard's live row
+            self.log.exception("final live state not written")
         path = write_report(self.ctx.platform.reports_dir, summary, self.trades)
         self.log.info("report written to %s", path)
         return path

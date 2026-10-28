@@ -3,7 +3,8 @@
 Sampled once a loop (every second). Fires when, at the same moment:
   S1/S2  V rose in each of the last ``windows`` windows of ``window_s`` seconds,
   S3     V rose at least ``min_rise_pct`` % over those windows,
-  S4     NIFTY futures (spot if no future) moved at least ``min_move`` points either way over them.
+  S4     NIFTY futures (spot if no future) moved at least ``min_move`` points either way over them
+         (only when ``min_move`` > 0; the move is reported either way).
 """
 
 from __future__ import annotations
@@ -99,5 +100,5 @@ class PairSignal:
         move = last.fut - start.fut
         ce_ch, pe_ch = round(last.ce - start.ce, 2), round(last.pe - start.pe, 2)
         driver = "CE" if ce_ch > pe_ch else "PE"
-        fired = up >= cfg.windows and rise >= cfg.min_rise_pct and abs(move) >= min_move
+        fired = up >= cfg.windows and rise >= cfg.min_rise_pct and (min_move <= 0 or abs(move) >= min_move)
         return SignalState(fired, True, up, rise, move, last.value, driver, ce_ch, pe_ch)

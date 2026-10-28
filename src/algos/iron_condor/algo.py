@@ -1,6 +1,6 @@
 """NIFTY weekly short iron condor (paper, spec v2: docs/strategy-criteria/iron-condor.md).
 
-Day: trade-day check (expiry day + 2 trading days before it) -> subscribe NIFTY, VIX and strikes
+Day: trade-day check (within ``trade_window_days`` of expiry: every trading day) -> subscribe NIFTY, VIX and strikes
 around ATM -> 09:45-10:00 entry: VIX < 20, CE/PE premium balance, spreads, min credit (PCR logged
 only) -> hedges first -> monitor exits every loop (kill, stale feed, stop, premium blow-out,
 target, 15:15 time exit) -> report. No pre-open checks: the laptop is switched on at ~09:35.

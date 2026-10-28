@@ -6,8 +6,8 @@ When a rule changes, update the file here first, then the config/code.
 
 | Strategy | File | Type | Status |
 |---|---|---|---|
-| NIFTY short iron condor | [iron-condor.md](iron-condor.md) | option selling, non-directional | v2 implemented, paper |
-| NIFTY long strangle scalp | [long-strangle-scalp.md](long-strangle-scalp.md) | option buying, long volatility, up to 3 trades 09:45–10:30 | v0.1 implemented, paper from 28 Oct 2026 |
+| NIFTY short iron condor | [iron-condor.md](iron-condor.md) | option selling, non-directional, every trading day | v2 implemented, paper |
+| NIFTY long strangle scalp | [long-strangle-scalp.md](long-strangle-scalp.md) | option buying, long volatility, Mon/Tue, up to 3 trades 09:45–10:30 | v0.2 implemented, paper |
 | CE/PE premium-skew directional buy | [premium-skew-option-buying.md](premium-skew-option-buying.md) | option buying, directional | idea only — build later |
 
 ## Daily constraint that applies to every strategy

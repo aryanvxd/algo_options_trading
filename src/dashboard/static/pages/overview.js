@@ -17,6 +17,7 @@
 
   let state = null;
   let timers = [];
+  let stopControl = null;
   let lastHistory = null;
 
   function render(el) {
@@ -37,6 +38,8 @@
           <button class="btn-icon-box" id="ov-refresh" title="Refresh" aria-label="Refresh"><i class="fa-solid fa-rotate"></i></button>
         </div>
       </div>
+
+      <div id="ov-control" class="control-card"></div>
 
       <div class="top-bar">
         <div class="top-bar-group">
@@ -68,6 +71,8 @@
     document.getElementById('ov-next').addEventListener('click', () => setDate(App.shiftDate(state.date, 1)));
     document.getElementById('ov-today').addEventListener('click', () => setDate(App.meta?.today || App.isoDate(new Date())));
     document.getElementById('ov-refresh').addEventListener('click', () => load(true));
+    stopControl?.();
+    stopControl = App.control.mount(document.getElementById('ov-control'));
     load(true);
   }
 
@@ -172,7 +177,8 @@
   function card(s) {
     // The run's own status only changes at the report; the live state knows sooner.
     let key = s.status;
-    if (['ENTRY_PENDING', 'EXITING'].includes(s.live_status)) key = s.live_status;
+    // ... but only while the run is going: a window closed mid-wait leaves a stale live row.
+    if (['STARTED', 'IN_TRADE'].includes(s.status) && ['ENTRY_PENDING', 'EXITING'].includes(s.live_status)) key = s.live_status;
     else if (s.live_status === 'DONE' && s.status === 'IN_TRADE') key = 'CLOSED';
     const st = STATUS[key] || [s.status, 'tone-slate', false];
     const live = st[2] && isLiveView();
@@ -185,12 +191,15 @@
     else if (traded && (s.max_profit !== null || s.max_drawdown !== null))
       note = `Best ${App.money(s.max_profit)} · worst ${App.money(s.max_drawdown)} during the trade`;
     const sub = state.source === 'replay' ? `Replay run #${s.run_id}` : (s.spot ? `NIFTY ${App.num(s.spot, 1)} · VIX ${App.num(s.vix, 2)}` : `Run #${s.run_id}`);
+    const runs = (s.runs || []).length > 1
+      ? `<div class="strategy-note"><i class="fa-solid fa-layer-group"></i> ${s.runs.length} runs today: ${s.runs.map((r) =>
+        `#${r.run_id} ${App.timeOf(r.started_at, false)} ${App.esc((STATUS[r.status] || [r.status])[0].toLowerCase())}${r.trades ? ` (${r.trades} trade${r.trades === 1 ? '' : 's'})` : ''}`).join(' · ')}</div>` : '';
 
     return `<a class="strategy-card card-link" href="#/strategy/${App.esc(s.algo_id)}/today" title="Open the strategy page"
       style="--strategy-color:${App.colorFor(s.algo_id)}">
       <div class="strategy-top">
         <div><div class="strategy-name">${App.esc(s.name)}</div><div class="strategy-sub">${sub}</div></div>
-        <div class="chips">${modeChip}${chip(st[0], st[1], live)}</div>
+        <div class="chips">${modeChip}${(s.runs || []).length > 1 ? chip(`${s.runs.length} runs`, 'tone-slate', false) : ''}${chip(st[0], st[1], live)}</div>
       </div>
       <div class="strategy-pnl ${App.tone(pnl)}">${traded ? App.money(pnl) : '—'}</div>
       <div class="strategy-pnl-label">${traded ? (s.open_positions ? 'net, open position marked to market' : 'net P&L after charges') : 'no trade'}</div>
@@ -202,6 +211,7 @@
       </div>
       ${reason ? `<div class="strategy-note"><i class="fa-solid fa-door-open"></i> Exit: ${App.esc(reason)}</div>` : ''}
       ${note ? `<div class="strategy-note">${note}</div>` : ''}
+      ${runs}
     </a>`;
   }
 
@@ -354,6 +364,6 @@
   App.page('overview', {
     title: 'Overview',
     render,
-    destroy() { timers.forEach(clearInterval); timers = []; },
+    destroy() { timers.forEach(clearInterval); timers = []; stopControl?.(); stopControl = null; },
   });
 })();

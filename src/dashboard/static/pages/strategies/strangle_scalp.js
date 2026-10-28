@@ -34,8 +34,8 @@
       : `<div class="muted small">${App.esc(lv.pair_reason || 'No pair selected yet')}</div>`;
     return `<div class="section-card" style="margin-bottom:16px">
       <div class="card-head"><div><div class="section-title"><i class="fa-solid fa-wave-square"></i> Entry signal</div>
-        <div class="section-subtitle">V = mid(CE) + mid(PE) must rise in ${lv.windows_needed} windows in a row, by ${lv.min_rise_pct}%,
-          with NIFTY futures moving ${lv.min_fut_move} pts${lv.dte !== null ? ` (DTE ${lv.dte})` : ''}</div></div>
+        <div class="section-subtitle">V = mid(CE) + mid(PE) must rise in ${lv.windows_needed} windows in a row, by ${lv.min_rise_pct}%${lv.min_fut_move
+          ? `, with NIFTY futures moving ${lv.min_fut_move} pts` : ' (futures move logged, not required)'}${lv.dte !== null ? ` · DTE ${lv.dte}` : ''}</div></div>
         <div class="chips">${App.chip(`trades ${lv.trades_used} / ${lv.max_trades}`, lv.trades_used >= lv.max_trades ? 'tone-slate' : 'tone-blue')}
           ${App.chip(`losses in a row ${losses} / ${lv.max_consecutive_losses}`, losses ? 'tone-amber' : 'tone-slate')}
           ${App.chip(`day net ${App.money(lv.realized_net)} (limit −₹${lv.max_day_loss})`, App.tone(lv.realized_net) === 'neg' ? 'tone-red' : 'tone-slate')}</div></div>
@@ -45,7 +45,10 @@
             ${meter('Rising windows', sig.windows_up ?? 0, lv.windows_needed, (v) => String(v), (sig.windows_up ?? 0) >= lv.windows_needed)}
             ${meter('Rise in V', sig.rise_pct, lv.min_rise_pct, (v) => `${Number(v).toFixed(1)}%`, (sig.rise_pct ?? 0) >= lv.min_rise_pct,
               Math.max(0, sig.rise_pct ?? 0))}
-            ${meter('Futures move', sig.fut_move, lv.min_fut_move, (v) => `${Math.abs(Number(v)).toFixed(1)} pts`, Math.abs(sig.fut_move ?? 0) >= lv.min_fut_move)}
+            ${lv.min_fut_move
+              ? meter('Futures move', sig.fut_move, lv.min_fut_move, (v) => `${Math.abs(Number(v)).toFixed(1)} pts`, Math.abs(sig.fut_move ?? 0) >= lv.min_fut_move)
+              : `<div class="meter-head"><span>Futures move (logged only)</span><span>${sig.fut_move !== null && sig.fut_move !== undefined
+                ? `${sig.fut_move > 0 ? '+' : ''}${Number(sig.fut_move).toFixed(1)} pts` : '—'}</span></div>`}
           </div></div>
         <div><div class="mini-title">V, last 60 seconds</div><div class="chart-box chart-xs"><canvas id="scalp-v"></canvas></div>
           <div class="chart-foot">Stop ${App.money(lv.stop_rupees)} · target ${App.money(lv.target_rupees)} · trailing from ${App.money(lv.trail_activate_rupees)}

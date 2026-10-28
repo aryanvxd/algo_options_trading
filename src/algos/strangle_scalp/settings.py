@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from trading_core.strategy.base import BaseAlgoConfig
 
@@ -32,6 +32,7 @@ class SignalConfig(BaseModel):
     window_s: float = 5.0                   # S1: pair value V must rise in each window ...
     windows: int = 3                        # S2: ... this many windows in a row
     min_rise_pct: float = 2.0               # S3: V rose at least this % over the windows
+    require_fut_move: bool = False          # S4 on/off; the futures move is logged either way
     min_fut_move_pts_0dte: float = 12.0     # S4: NIFTY futures moved this much over the same span
     min_fut_move_pts: float = 18.0
 
@@ -56,7 +57,12 @@ class ExitConfig(BaseModel):
     stale_feed_seconds: float = 5.0
 
 
+Weekday = Literal["Mon", "Tue", "Wed", "Thu", "Fri"]
+WEEKDAYS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
 class StrangleScalpConfig(BaseAlgoConfig):
+    trade_weekdays: list[Weekday] = Field(default_factory=lambda: ["Mon", "Tue"])
     underlying: str = "NIFTY"
     index_symbol: str = "NIFTY 50"
     vix_symbol: str = "INDIA VIX"

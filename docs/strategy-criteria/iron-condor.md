@@ -1,9 +1,9 @@
 # NIFTY short iron condor
 
-- **Status:** v2 — implemented in `src/algos/iron_condor/` (config version 0.2.1, 27 Oct 2026).
+- **Status:** v2 — implemented in `src/algos/iron_condor/` (config version 0.3.0, 28 Oct 2026).
   Section 9 lists what changed from v1.
 - **Mode:** paper, 2 lots (from 27 Oct 2026; was 1).
-- **Last changed:** 27 Oct 2026.
+- **Last changed:** 28 Oct 2026 — trades every trading day (was the last 3 days of the cycle).
 
 ## 1. Idea
 
@@ -17,8 +17,8 @@ checks only, enter after 09:45, flat by 15:15.
 |---|---|
 | Underlying | NIFTY 50 weekly options, nearest expiry (Tuesday; moves earlier on a holiday) |
 | Lot size | read from Kite's instrument list each day (65 at the time of writing) |
-| Trade days | expiry day and the 2 trading days before it (normally Fri, Mon, Tue) |
-| No-trade days | every other day (normally Wed, Thu), NSE holidays, weekends |
+| Trade days | **every trading day** (from 28 Oct 2026): expiry day and the 4 trading days before it (Wed–Tue). Config `trade_window_days: 5` |
+| No-trade days | NSE holidays, weekends |
 | Trades per day | one; no re-entry after an exit |
 
 Expiry and holidays are read each day from Kite's instrument list and `config/holidays/`, never
@@ -40,7 +40,7 @@ hard-coded.
 
 | # | Check | Rule | Default | Why |
 |---|---|---|---|---|
-| E1 | Trade day | today is expiry day or 1–2 trading days before it | 3-day window | strategy design |
+| E1 | Trade day | today is expiry day or 1–4 trading days before it | 5-day window (every day) | strategy design |
 | E2 | India VIX | VIX **below** the limit | `< 20` | high VIX = big moves, stops get hit |
 | E3 | PCR (log only) | PCR (OI) recorded, **not enforced yet** | band chosen after 2–3 weeks of data | extreme PCR = one-sided positioning |
 | E4 | CE/PE premium balance | short CE and short PE premiums are close to each other | ratio `≤ 1.5` (proposed) | big imbalance = market leaning one way |
@@ -83,6 +83,8 @@ long_pe  = short_pe - hedge     long_ce  = short_ce + hedge
 
 | Trading days to expiry | Width (short PE ↔ short CE) | Hedge (short → long) |
 |---|---|---|
+| 4 (normally Wed) | 600 | 300 |
+| 3 (normally Thu) | 600 | 300 |
 | 2 (normally Fri) | 600 | 300 |
 | 1 (normally Mon) | 550 | 250 |
 | 0 (expiry, normally Tue) | 500 | 200 |
@@ -149,10 +151,17 @@ order, all six exits, one trade a day.
 Decided 26 Oct 2026: PCR is log-only; an unbalanced CE/PE premium waits and re-checks until
 10:00; last entry 10:00; premium blow-out exit kept.
 
+Decided 28 Oct 2026: trade **every trading day** (config 0.3.0, `trade_window_days: 5`). On flat
+days such as 28 Oct the options still lose time value, which is what the condor sells. Wednesday
+and Thursday (4 and 3 DTE) reuse the 2-DTE shape (600 wide, 300 hedges) for now.
+
 Decided 27 Oct 2026: paper trades **2 lots** (config 0.2.1). Stop/target stay in points, so in
 rupees they double (₹650 / ₹1,040); the day/week/month limits in section 7 were doubled to match.
 
 Still open:
+
+0. Wider shorts/hedges on 3–4 DTE? More time left means bigger moves before expiry; check the
+   Wed/Thu paper days (Performance tab, by DTE) before changing them.
 
 1. Premium balance limit: start at 1.5×, or another number?
 2. Capital: how much will you set aside for this strategy, and are the weekly/monthly loss

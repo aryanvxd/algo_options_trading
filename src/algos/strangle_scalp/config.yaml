@@ -4,11 +4,12 @@
 
 algo_id: strangle_scalp
 name: NIFTY Long Strangle Scalp
-version: "0.1.0"
-description: Buy an OTM CE+PE pair when its value keeps rising with a fast NIFTY move; up to 3 scalps 09:45-10:30.
+version: "0.2.0"
+description: Mon/Tue - buy an OTM CE+PE pair when its value keeps rising; up to 3 scalps 09:45-10:30.
 mode: paper            # live is disabled in v1
 lots: 1
-capital: 12000         # bucket: the dearest pair (~₹130 on 3-4 DTE ≈ ₹8,500 at 1 lot) plus a buffer
+capital: 12000         # bucket: the dearest pair (~₹75 on Monday's 1 DTE ≈ ₹4,900 at 1 lot) plus a buffer
+trade_weekdays: [Mon, Tue]     # 28 Oct 2026: only the last two days of the weekly cycle (1 DTE and expiry day)
 
 max_trades: 3
 reentry_cooldown_s: 180        # D2: 3 minutes between an exit and the next entry
@@ -38,8 +39,10 @@ signal:
   window_s: 5                  # V = mid(CE) + mid(PE) must rise in each 5 s window ...
   windows: 3                   # ... 3 in a row (~15 s)
   min_rise_pct: 2.0            # V up at least 2% over those 15 s
-  min_fut_move_pts_0dte: 12    # NIFTY futures moved >= 12 pts either way in the same 15 s (expiry day)
-  min_fut_move_pts: 18         # ... >= 18 pts on other days (dearer pair, needs a bigger move)
+  # 28 Oct 2026: the futures-move check is off (it lagged the entry); the move is still logged.
+  require_fut_move: false
+  min_fut_move_pts_0dte: 12    # used only when require_fut_move is true
+  min_fut_move_pts: 18
 
 limits:
   max_consecutive_losses: 2    # stop for the day after 2 losing trades in a row

@@ -26,6 +26,7 @@
 
   let st = null;          // page state
   let timers = [];
+  let stopControl = null; // Start / Stop bar
 
   const today = () => App.meta?.today || App.isoDate(new Date());
   const info = (id) => (App.meta?.strategies || []).find((a) => a.algo_id === id);
@@ -64,6 +65,7 @@
           <div class="page-title"><i class="fa-solid fa-circle" style="color:${App.colorFor(algoId)};font-size:0.8rem"></i>${App.esc(a.name)}</div>
           <div class="page-subtitle">${App.esc(a.description || '')}</div>
           <div class="chips chips-left" style="margin-top:8px">${facts}</div>
+          <div id="sp-control" style="margin-top:10px"></div>
         </div>
         <div class="header-meta">
           <span id="sp-live" class="chip live tone-green hidden"><span class="chip-dot"></span>Live</span>
@@ -93,6 +95,8 @@
     bindSegmented('sp-mode', 'mode');
     bindSegmented('sp-source', 'source');
     document.getElementById('sp-refresh').addEventListener('click', () => load(true));
+    stopControl?.();
+    stopControl = App.control.mount(document.getElementById('sp-control'), { algoId });
     load(true);
   }
 
@@ -204,7 +208,7 @@
 
     body.innerHTML = `
       <div class="status-line">${App.chip(s[0], s[1], running)}
-        <span class="muted">Run #${day.run.run_id} · v${App.esc(day.run.version || '?')} · ${day.run.lots ?? '?'} lot(s)
+        <span class="muted">${runsText(day.runs)} · v${App.esc(day.run.version || '?')} · ${day.run.lots ?? '?'} lot(s)
         ${day.live?.spot ? ` · NIFTY ${App.num(day.live.spot, 1)}` : ''}${day.live?.vix ? ` · VIX ${App.num(day.live.vix, 2)}` : ''}
         ${day.live && !day.live.feed_ok && running ? ' · <span class="neg">feed stale</span>' : ''}</span></div>
       ${banner ? `<div class="banner">${banner}</div>` : ''}
@@ -238,6 +242,13 @@
     clearTimers();
     document.getElementById('sp-live')?.classList.toggle('hidden', !on);
     if (on) timers.push(setInterval(() => load(false), REFRESH_MS));
+  }
+
+  // "Run #3" or, when the day had several runs, each with its time, status and trades.
+  function runsText(runs) {
+    if (!runs || runs.length <= 1) return runs?.length ? `Run #${runs[0].run_id}` : 'No run';
+    return `${runs.length} runs: ` + runs.map((r) => `#${r.run_id} ${App.timeOf(r.started_at, false)}–${r.ended_at ? App.timeOf(r.ended_at, false) : 'now'}
+      ${App.esc((STATUS[r.status] || [r.status])[0].toLowerCase())}${r.trades ? ` (${r.trades} trade${r.trades === 1 ? '' : 's'})` : ''}`).join(' · ');
   }
 
   const capitalLabel = (src) => ({ kite_margin: 'Kite basket margin', estimate: 'estimate: worst loss at expiry',
@@ -595,7 +606,7 @@
     const important = d.events.filter((e) => ['ENTRY', 'EXIT', 'EXIT_TRIGGER', 'SKIP', 'KILL_SWITCH', 'ERROR', 'ENTRIES_STOPPED', 'ENTRY_FAILED'].includes(e.type));
     return `<div class="section-card journal-day">
       <div class="card-head"><div><div class="section-title">${App.prettyDate(d.date)}</div>
-        <div class="section-subtitle">${d.run_id ? `Run #${d.run_id}` : 'No run'}${d.summary_notes ? ' · ' + App.esc(d.summary_notes) : ''}</div></div>
+        <div class="section-subtitle">${runsText(d.runs)}${d.summary_notes ? ' · ' + App.esc(d.summary_notes) : ''}</div></div>
         <div class="chips">${d.status ? App.chip(s[0], s[1]) : ''}${d.net !== null ? `<span class="journal-net ${App.tone(d.net)}">${App.money(d.net)}</span>` : ''}</div></div>
       ${d.skip_reason ? `<div class="banner"><i class="fa-solid fa-circle-info"></i> ${App.esc(d.skip_reason)}</div>` : ''}
       <div class="row row-1-1">
@@ -705,6 +716,6 @@
   App.page('strategy', {
     title: (args) => info(args[0])?.name || 'Strategy',
     render,
-    destroy() { clearTimers(); closeDetail(); },
+    destroy() { clearTimers(); closeDetail(); stopControl?.(); stopControl = null; },
   });
 })();
