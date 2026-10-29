@@ -337,6 +337,42 @@ class JournalNote(Base):
     __table_args__ = (Index("ix_notes_algo_date", "algo_id", "trade_date"),)
 
 
+# ---------------------------------------------------------------- market calendar
+
+class CalendarEvent(Base):
+    """An economic release, company results date or other scheduled market event (see
+    ``trading_core.market.events``). Upserted by (source, event_key), so refetching never duplicates."""
+    __tablename__ = "calendar_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(20))            # forexfactory | nse_results | india
+    event_key: Mapped[str] = mapped_column(String(200))
+    category: Mapped[str] = mapped_column(String(12))          # economic | results
+    ts: Mapped[datetime]                                       # IST; midnight when only the date is known
+    all_day: Mapped[bool] = mapped_column(Boolean, default=False)
+    country: Mapped[str | None] = mapped_column(String(8))     # IN, US, EU, ... (results: IN)
+    title: Mapped[str] = mapped_column(Text)
+    impact: Mapped[str | None] = mapped_column(String(10))     # High | Medium | Low | Holiday
+    forecast: Mapped[str | None] = mapped_column(String(40))
+    previous: Mapped[str | None] = mapped_column(String(40))
+    actual: Mapped[str | None] = mapped_column(String(40))
+    symbol: Mapped[str | None] = mapped_column(String(40))
+    detail: Mapped[dict[str, Any] | None]
+    fetched_at: Mapped[datetime]
+
+    __table_args__ = (Index("ix_calendar_key", "source", "event_key", unique=True),
+                      Index("ix_calendar_ts", "ts"))
+
+
+class CalendarSource(Base):
+    """When each calendar source was last fetched, and how it went."""
+    __tablename__ = "calendar_sources"
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)
+    fetched_at: Mapped[datetime]
+    status: Mapped[str] = mapped_column(String(10))            # OK | FAILED
+    rows: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
 # ---------------------------------------------------------------- market data (Parquet store manifest)
 
 class MarketDataFile(Base):

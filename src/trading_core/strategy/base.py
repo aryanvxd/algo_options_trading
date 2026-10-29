@@ -165,6 +165,20 @@ class BaseAlgo(ABC):
         """Price/P&L levels for the dashboard (entry credit, stop, target, ...)."""
         return None
 
+    def market_events(self, start: datetime, end: datetime, **filters: Any) -> list:
+        """Stored calendar events in ``[start, end)``; see ``trading_core.market.events.between``."""
+        from trading_core.market import events
+
+        return events.between(self.ctx.journal.db, start, end, **filters)
+
+    def log_events(self, name: str, start: datetime, end: datetime, min_impact: str = "High") -> list:
+        """Journal the events in a window as a log-only check (value = how many); returns them."""
+        found = self.market_events(start, end, min_impact=min_impact, category="economic")
+        self.check(name, True, len(found), None, log_only=True, min_impact=min_impact,
+                   window=f"{start:%a %d %b %H:%M} - {end:%a %d %b %H:%M}",
+                   events=[f"{e.ts:%a %H:%M} {e.country} {e.title} ({e.impact})" for e in found][:10])
+        return found
+
     def reentry_block(self, now: datetime) -> str | None:
         """Why no further trade may be taken today (None = keep looking for entries)."""
         if len(self.trades) >= self.cfg.max_trades:

@@ -15,7 +15,12 @@ class FilterConfig(BaseModel):
     vix_max: float = 18.0                 # W2: a weekend gap scales with VIX
     max_premium_ratio: float = 1.5        # W4: dearer ÷ cheaper option at the short distance
     min_gap_days: int = 3                 # W1: calendar days to the next trading day (Fri -> Mon = 3)
-    event_min_impact: Literal["High", "Medium"] = "High"   # W3 (needs the market calendar; logged until then)
+    event_min_impact: Literal["High", "Medium"] = "High"   # W3: skip if such an event falls in the weekend gap
+    # W3 also: results of these heavyweights dated on the entry day or over the weekend (they report
+    # after the close or on Saturdays and move Monday's open).
+    results_symbols: list[str] = Field(default_factory=lambda: [
+        "HDFCBANK", "RELIANCE", "ICICIBANK", "INFY", "BHARTIARTL", "TCS", "LT", "ITC", "SBIN", "AXISBANK"])
+    require_calendar: bool = False        # True = skip the weekend when the calendar couldn't be fetched
 
 
 class EntryConfig(BaseModel):

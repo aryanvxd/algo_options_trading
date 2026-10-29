@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from dashboard import control, queries
+from dashboard import calendar_queries, control, queries
 from dashboard import strategy_queries as sq
 from trading_core import __version__
 from trading_core.clock import Clock, LiveClock
@@ -167,6 +167,21 @@ def create_app(db: Database, clock: Clock | None = None, platform: PlatformConfi
             return control.stop(platform, db, _known(algo_id), clock.now())
         except control.ControlError as e:
             raise HTTPException(409, str(e)) from None
+
+    # Market calendar: stored events; Refresh refetches the web sources now.
+    @app.get("/api/calendar")
+    def api_calendar(start: str | None = None, end: str | None = None, days: int = Query(21, ge=1, le=400)):
+        a = _day(start, clock)
+        b = _day(end, clock) if end else a + timedelta(days=days - 1)
+        return calendar_queries.calendar(db, a, b)
+
+    @app.post("/api/calendar/refresh")
+    def api_calendar_refresh():
+        from trading_core.db.migrate import holidays
+        from trading_core.market.calendar import MarketCalendar
+        from trading_core.market.events import refresh
+
+        return refresh(db, platform, clock.now(), MarketCalendar(holidays(db)), force=True)
 
     @app.post("/api/kite/login")
     def api_login():

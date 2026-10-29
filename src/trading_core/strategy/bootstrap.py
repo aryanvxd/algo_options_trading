@@ -116,6 +116,9 @@ def _run(platform: PlatformConfig, db: Database, algo_id: str, algo_cls: type, c
         premarket_source = KitePremarketSource(kite, clock)
     broker = PaperBroker(feed, charges, platform.paper, clock)
 
+    if not replay_date and platform.calendar_autofetch:
+        refresh_calendar(platform, db, clock, calendar)
+
     resumed = False
     existing = None if (replay_date or force_new) else journal.find_run(algo_id, trade_date, mode, "live")
     if existing is not None:
@@ -140,6 +143,16 @@ def _run(platform: PlatformConfig, db: Database, algo_id: str, algo_cls: type, c
     if source == "live":
         export_recorded_day(platform, db, trade_date, clock.today())
     return run_id
+
+
+def refresh_calendar(platform: PlatformConfig, db: Database, clock: Clock, calendar: MarketCalendar) -> None:
+    """Fetch the market calendar if it hasn't been today (the algos' event checks read it). Never fatal."""
+    from trading_core.market.events import refresh
+
+    try:
+        log.info("market calendar: %s", refresh(db, platform, clock.now(), calendar))
+    except Exception:  # noqa: BLE001 - a calendar outage must not stop trading
+        log.exception("market calendar refresh failed")
 
 
 def export_recorded_day(platform: PlatformConfig, db: Database, day: date, today: date) -> None:

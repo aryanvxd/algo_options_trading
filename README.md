@@ -88,6 +88,11 @@ algo data status                                 # what is stored, first/last da
 algo data query "select * from options_eod where trade_date = '2026-10-22' limit 5"
 ```
 
+`algo data calendar` fetches the market calendar: Forex Factory's weekly global events, NSE's
+results calendar, and the India list in `config/calendar/` (RBI, CPI, GDP, IIP, WPI, Budget: keep
+it up to date, like the holidays). Live algo runs also fetch it once a day on start. The
+dashboard's **Calendar** page shows it, and the weekend condor's event check reads it.
+
 Downloads resume where they stopped (each day is recorded in `market_data_files`; holidays
 are recorded as EMPTY). After each live session the day's recorded ticks are exported to
 `options_ticks` / `index_ticks` automatically, and SQLite keeps only the last 7 days of ticks;

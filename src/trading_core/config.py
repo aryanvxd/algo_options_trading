@@ -78,6 +78,7 @@ class PlatformConfig(BaseModel):
     logs_dir: Path = Path("logs")
     log_level: str = "INFO"
     dashboard_port: int = 8050
+    calendar_autofetch: bool = True        # live algo runs fetch the market calendar once a day
     kite: KiteConfig = Field(default_factory=KiteConfig)
     charges: ChargeRates = Field(default_factory=ChargeRates)
     paper: PaperConfig = Field(default_factory=PaperConfig)

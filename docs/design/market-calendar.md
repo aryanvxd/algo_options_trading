@@ -1,6 +1,11 @@
 # Market calendar page and market breadth — plan
 
-- **Status:** plan, 29 Oct 2026. Nothing built.
+- **Status:** calendar built 29 Oct 2026 (C1–C3).
+  - Code: `trading_core/market/events.py`, `dashboard/calendar_queries.py`,
+    `static/pages/calendar.js`.
+  - India list: `config/calendar/india_2026_27.yaml`.
+  - Data: migration 0004.
+  - Advances/declines (section 5) is still a plan.
 - **Scope:**
   - a **Calendar** page in the dashboard, in our own UI, with the same content as Sensibull's
     stock-market calendar (economic events, company results, holidays);
@@ -45,11 +50,11 @@ A shared helper, `ctx.events(start, end, min_impact)`, returns stored events in 
 
 | Algo | Use |
 |---|---|
-| Weekend condor | **W3**: skip the weekend if a High-impact event falls between Friday 15:30 and Monday 09:15 |
+| Weekend condor | **W3**: skip the weekend if a High-impact event falls between Friday 15:30 and Monday 09:15, or if a heavyweight (`results_symbols`: the top 10 NIFTY weights) has results dated Friday–Sunday |
 | Intraday condor | log only at first: "event today" (RBI policy, US CPI the night before) on the entry check; decide from the data whether to skip |
 | Strangle scalp | log only: an event inside 09:45–10:30 (RBI at 10:00) is exactly when a scalp might pay; the logs will show |
 
-## 4. Build order
+## 4. Build order (all done)
 
 | Step | What |
 |---|---|

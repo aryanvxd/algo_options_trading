@@ -246,6 +246,10 @@ class StrangleScalpAlgo(BaseAlgo):
         if not self.vix_logged and self.vix() is not None:
             self.check("vix", True, self.vix(), None, log_only=True)
             self.vix_logged = True
+            # Log only: events inside the entry window (e.g. RBI policy at 10:00) - a scalp may like them.
+            sched, tz = self.cfg.schedule, now.tzinfo
+            self.log_events("events", datetime.combine(self.ctx.trade_date, sched.entry, tzinfo=tz),
+                            datetime.combine(self.ctx.trade_date, sched.square_off, tzinfo=tz), min_impact="Medium")
         if self.pair is None:
             return self._wait(self.pair_reason or "no pair selected yet")
         st = self.last_state

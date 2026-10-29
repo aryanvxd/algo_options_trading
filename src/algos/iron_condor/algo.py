@@ -8,7 +8,7 @@ target, 15:15 time exit) -> report. No pre-open checks: the laptop is switched o
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
 from algos.iron_condor import filters
@@ -39,6 +39,7 @@ class IronCondorAlgo(BaseAlgo):
         self.feed_ready = False
         self.strikes_subscribed = False
         self.pcr_logged = False
+        self.events_logged = False
 
     # ------------------------------------------------------------ sizing / levels
 
@@ -164,6 +165,14 @@ class IronCondorAlgo(BaseAlgo):
 
         atm = atm_strike(spot, cfg.strike_step)
         pcr = filters.pcr(atm, cfg.filters.pcr_range_pts, self.chain, quote)
+        if not self.events_logged:
+            # Log only: High-impact events from the last close to today's close (US data overnight,
+            # RBI policy at 10:00 ...). Whether they should block an entry is decided from the data later.
+            self.events_logged = True
+            now = self.ctx.clock.now()
+            prev = self.ctx.calendar.prev_trading_day(self.ctx.trade_date)
+            self.log_events("events", datetime.combine(prev, time(15, 30), tzinfo=now.tzinfo),
+                            datetime.combine(self.ctx.trade_date, time(15, 30), tzinfo=now.tzinfo))
         if pcr is not None and not self.pcr_logged:
             self.check("pcr", True, pcr, None, log_only=True, range_pts=cfg.filters.pcr_range_pts)
             self.pcr_logged = True

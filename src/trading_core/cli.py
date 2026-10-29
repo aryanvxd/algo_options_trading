@@ -176,6 +176,16 @@ def cmd_data(args: argparse.Namespace, platform: PlatformConfig) -> int:
                   f"{r['days']:>6}{r['rows']:>12,}{r['problems']:>5}")
         return 0
 
+    if args.action == "calendar":
+        from trading_core.db.migrate import holidays
+        from trading_core.market.calendar import MarketCalendar
+        from trading_core.market.events import refresh
+
+        for source, outcome in refresh(db, platform, LiveClock().now(), MarketCalendar(holidays(db)),
+                                       force=args.force).items():
+            print(f"{source:<14}{outcome}")
+        return 0
+
     if args.action == "export-recorder":
         from trading_core.marketdata.sources.recorder import export_day, prune_sqlite_ticks
 
@@ -290,6 +300,8 @@ def build_parser() -> argparse.ArgumentParser:
             a.add_argument("--symbol", help='one index, e.g. "NIFTY 50" (default: all in config)')
         if name == "constituents":
             a.add_argument("--universe", default="nifty50")
+    cal = dsub.add_parser("calendar", help="market calendar: economic events, results, India releases")
+    cal.add_argument("--force", action="store_true", help="refetch sources already fetched today")
     ex = dsub.add_parser("export-recorder", help="move recorded live ticks to Parquet")
     ex.add_argument("--date", metavar="YYYY-MM-DD", help="default: today")
     ex.add_argument("--prune", action="store_true", help="also delete exported ticks older than the keep window")

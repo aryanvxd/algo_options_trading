@@ -10,7 +10,7 @@ from trading_core.db.engine import Database
 def platform(tmp_path) -> PlatformConfig:
     return PlatformConfig(root=project_root(), db_url=f"sqlite:///{(tmp_path / 'test.db').as_posix()}",
                           data_dir=tmp_path / "data", logs_dir=tmp_path / "logs",
-                          marketdata={"dir": tmp_path / "market"})
+                          marketdata={"dir": tmp_path / "market"}, calendar_autofetch=False)   # no network
 
 
 @pytest.fixture

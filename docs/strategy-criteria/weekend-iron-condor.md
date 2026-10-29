@@ -1,8 +1,7 @@
 # NIFTY weekend short iron condor
 
 - **Status:** v0.1 implemented in `src/algos/weekend_condor/` (config version 0.1.0, 29 Oct 2026), with
-  the proposed defaults below. **W3 (weekend events) is logged only** until the market calendar
-  exists. Numbers marked *(proposed)* are starting points to tune.
+  the proposed defaults below. Numbers marked *(proposed)* are starting points to tune.
 - **Mode:** paper, 1 lot, from Friday 30 Oct 2026.
 - **Last changed:** 29 Oct 2026.
 
@@ -59,7 +58,7 @@ Three things work against it:
 |---|---|---|---|---|
 | W1 | Entry day | today is the last trading day before 2+ non-trading days | — | strategy |
 | W2 | India VIX | below the limit | `< 18` (stricter than the intraday condor's 20) | a weekend gap scales with VIX |
-| W3 | Weekend events | no **High-impact** event between Friday 15:30 and Monday 09:15 | from the market calendar (see `docs/design/market-calendar.md`) | e.g. US jobs data on the first Friday of the month, election results, a Saturday Budget |
+| W3 | Weekend events | no **High-impact** event between Friday 15:30 and Monday 09:15, and no results from a heavyweight dated Friday–Sunday | market calendar; heavyweights = `filters.results_symbols` (HDFCBANK, RELIANCE, ICICIBANK, INFY, BHARTIARTL, TCS, LT, ITC, SBIN, AXISBANK) | e.g. US jobs data on the first Friday of the month, a Saturday Budget, Reliance reporting after Friday's close |
 | W4 | Premium balance | `max(CE, PE) ÷ min(CE, PE)` at the short strikes | `≤ 1.5` | same as the intraday condor's E4 |
 | W5 | Liquidity | every leg's bid-ask spread | `≤ 2 pts` | |
 | W6 | Minimum credit | net credit at executable prices | `≥ 12 pts` | the credit must pay for the gap risk and ~₹195 of charges |
@@ -119,7 +118,7 @@ Hedges are bought first, as in the intraday condor. Product: NRML for margin (an
 | Stale feed only during market hours | done: `StaleFeed(market_hours=...)` |
 | NRML margin | done: `product: NRML` (used for the Kite basket margin) |
 | Report as soon as the day's work is done | done: `report_when_done` (Thursday skips at once; Monday reports right after the exit) |
-| Weekend-event check (W3) | **logged only**: needs the market calendar (`docs/design/market-calendar.md`) |
+| Weekend-event check (W3) | done (29 Oct): reads the market calendar. If the calendar hasn't been fetched in 3 days the check is logged as incomplete and the trade goes ahead, unless `require_calendar: true` |
 | Two-day replays | done: replay Friday, then Monday; the Monday replay adopts the Friday position |
 
 **Running it:**

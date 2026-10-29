@@ -4,7 +4,7 @@ Positional: sell on the last trading day before a weekend (normally Friday 14:45
 the weekend (``carry_overnight``), and buy back on the next trading day (normally Monday) from
 09:35 at the first moment every spread is tight, or at any price from 09:50.
 
-Entry day: VIX < 18, no high-impact weekend event (logged until the market calendar exists),
+Entry day: VIX < 18, no high-impact event and no heavyweight's results in the weekend gap (market calendar),
 CE/PE premium balance, spreads, minimum credit. Shorts sit 1.2 expected weekend moves from spot
 (VIX-scaled), hedges 200 pts further out. Exits on both days: kill, stale feed (market hours only),
 stop, premium blow-out, 60%-of-credit target; on the next day also the carried-position exit.
@@ -13,7 +13,7 @@ stop, premium blow-out, 60%-of-credit target; on the next day also the carried-p
 from __future__ import annotations
 
 import math
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Any
 
 from algos.iron_condor import filters
@@ -175,10 +175,8 @@ class WeekendCondorAlgo(BaseAlgo):
             self.check("entry_vix", False, vix, cfg.filters.vix_max)
             raise SkipDay(f"India VIX {vix} >= {cfg.filters.vix_max}: weekend gap risk too high")
         if not self.events_logged:
-            # W3 needs the market calendar (docs/design/market-calendar.md); until it exists, logged only.
-            self.check("weekend_events", True, None, None, log_only=True, min_impact=cfg.filters.event_min_impact,
-                       note="market calendar not built yet: no event check")
             self.events_logged = True
+            self._weekend_events(now)          # raises SkipDay when an event falls in the weekend gap
         spot = self.spot()
         if spot is None:
             return self._wait("no NIFTY tick yet")
@@ -217,6 +215,33 @@ class WeekendCondorAlgo(BaseAlgo):
                                     lots=cfg.lots, lot_size=self.lot_size, quoted_credit=res.net_credit_pts,
                                     expected_move=round(em, 1), carry_days=round(days, 2),
                                     exit_day=str(self.next_day), premium_ratio=round(balance.ratio, 3)))
+
+    def _weekend_events(self, now: datetime) -> None:
+        """W3: no event between today's close and the next trading day's open that could gap the market."""
+        from trading_core.market import events
+
+        f = self.cfg.filters
+        close = datetime.combine(self.ctx.trade_date, MARKET_CLOSE, tzinfo=now.tzinfo)
+        reopen = datetime.combine(self.next_day, MARKET_OPEN, tzinfo=now.tzinfo)
+        macro = self.market_events(close, reopen, category="economic", min_impact=f.event_min_impact)
+        day0 = datetime.combine(self.ctx.trade_date, time(0), tzinfo=now.tzinfo)
+        results = self.market_events(day0, reopen - timedelta(hours=9, minutes=15), category="results",
+                                     symbols=f.results_symbols)
+        found = [f"{e.ts:%a %H:%M} {e.country} {e.title} ({e.impact})" for e in macro] + \
+                [f"{e.ts:%a} {e.title}" for e in results]
+        fresh = events.covered(self.ctx.journal.db, now)
+        have_calendar = fresh.get("forexfactory", False) and fresh.get("india", False)
+        if not have_calendar and not self.ctx.is_replay:
+            self.check("weekend_events", not f.require_calendar, None, None, events=found,
+                       note="market calendar not fetched in the last 3 days: event check incomplete",
+                       sources=fresh)
+            if f.require_calendar:
+                raise SkipDay("no market calendar to check the weekend against (require_calendar)")
+        else:
+            self.check("weekend_events", not found, len(found), 0, events=found[:10],
+                       window=f"{close:%a %H:%M} - {reopen:%a %H:%M}", min_impact=f.event_min_impact)
+        if found:
+            raise SkipDay(f"weekend event(s): {'; '.join(found[:3])}")
 
     def _wait(self, reason: str) -> None:
         if reason != self._entry_wait_reason:

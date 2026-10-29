@@ -23,7 +23,9 @@ filters:
   vix_max: 18                  # W2: skip the weekend at or above this VIX
   max_premium_ratio: 1.5       # W4: CE vs PE at the short distance
   min_gap_days: 3              # W1: entry day = next trading day is >= 3 calendar days away (Fri -> Mon)
-  event_min_impact: High       # W3: logged only until the market calendar exists
+  event_min_impact: High       # W3: skip if a High-impact event falls between today's close and the next open
+  results_symbols: [HDFCBANK, RELIANCE, ICICIBANK, INFY, BHARTIARTL, TCS, LT, ITC, SBIN, AXISBANK]  # ... or their results
+  require_calendar: false      # true = also skip when the calendar hasn't been fetched in 3 days
 
 entry:
   expected_move_mult: 1.2      # shorts at 1.2 × spot × VIX/100 × sqrt(days to Monday 09:15 / 365) from spot
