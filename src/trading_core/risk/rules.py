@@ -23,10 +23,13 @@ class KillSwitch(ExitRule):
 class StaleFeed(ExitRule):
     name = "STALE_FEED"
 
-    def __init__(self, max_age_s: float):
+    def __init__(self, max_age_s: float, market_hours: tuple[time, time] | None = None):
         self.max_age_s = max_age_s
+        self.market_hours = market_hours        # only judge the feed while the market is open
 
     def check(self, ctx: RiskContext) -> str | None:
+        if self.market_hours and not (self.market_hours[0] <= ctx.now.time() < self.market_hours[1]):
+            return None
         if ctx.feed_age_s is None or ctx.feed_age_s > self.max_age_s:
             age = "never" if ctx.feed_age_s is None else f"{ctx.feed_age_s:.0f}s"
             return f"feed stale ({age} > {self.max_age_s:.0f}s)"

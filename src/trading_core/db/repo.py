@@ -143,23 +143,36 @@ class Journal:
 
     def positions_for_run(self, run_id: int) -> list[Position]:
         """Rebuild domain positions from the DB (used to resume after a restart)."""
-        out: list[Position] = []
         with self.db.session() as s:
             rows = s.scalars(select(m.Position).where(m.Position.run_id == run_id)
                              .order_by(m.Position.position_id)).all()
-            for r in rows:
-                charges = self._leg_charges(s, [l.leg_id for l in r.legs])
-                legs = [Leg(role=l.role, instrument_token=l.instrument_token, tradingsymbol=l.tradingsymbol,
-                            side=l.side, qty=l.qty, exchange=l.exchange, option_type=l.option_type,
-                            strike=l.strike, leg_id=l.leg_id, entry_price=l.entry_price, exit_price=l.exit_price,
-                            entry_charges=charges.get((l.leg_id, "ENTRY"), 0.0),
-                            exit_charges=charges.get((l.leg_id, "EXIT"), 0.0))
-                        for l in r.legs]
-                out.append(Position(structure=r.structure, underlying=r.underlying, legs=legs, expiry=r.expiry,
-                                    params=r.params or {}, position_id=r.position_id, status=r.status,
-                                    entry_time=r.entry_time, exit_time=r.exit_time, exit_reason=r.exit_reason,
-                                    capital_required=r.capital_required, capital_source=r.capital_source,
-                                    spot_at_entry=r.spot_at_entry, spot_at_exit=r.spot_at_exit))
+            return self._domain_positions(s, rows)
+
+    def open_positions_before(self, algo_id: str, mode: str, source: str, day: date) -> list[Position]:
+        """Positions this algo opened on an earlier day and still holds (carried overnight)."""
+        with self.db.session() as s:
+            rows = s.scalars(
+                select(m.Position).join(m.AlgoRun, m.AlgoRun.run_id == m.Position.run_id)
+                .where(m.Position.algo_id == algo_id, m.Position.mode == mode, m.AlgoRun.source == source,
+                       m.AlgoRun.trade_date < day, m.Position.status.in_(("OPEN", "OPENING")))
+                .order_by(m.Position.position_id)).all()
+            return [p for p in self._domain_positions(s, rows) if not p.is_flat]
+
+    def _domain_positions(self, s, rows) -> list[Position]:
+        out: list[Position] = []
+        for r in rows:
+            charges = self._leg_charges(s, [l.leg_id for l in r.legs])
+            legs = [Leg(role=l.role, instrument_token=l.instrument_token, tradingsymbol=l.tradingsymbol,
+                        side=l.side, qty=l.qty, exchange=l.exchange, option_type=l.option_type,
+                        strike=l.strike, leg_id=l.leg_id, entry_price=l.entry_price, exit_price=l.exit_price,
+                        entry_charges=charges.get((l.leg_id, "ENTRY"), 0.0),
+                        exit_charges=charges.get((l.leg_id, "EXIT"), 0.0))
+                    for l in r.legs]
+            out.append(Position(structure=r.structure, underlying=r.underlying, legs=legs, expiry=r.expiry,
+                                params=r.params or {}, position_id=r.position_id, status=r.status,
+                                entry_time=r.entry_time, exit_time=r.exit_time, exit_reason=r.exit_reason,
+                                capital_required=r.capital_required, capital_source=r.capital_source,
+                                spot_at_entry=r.spot_at_entry, spot_at_exit=r.spot_at_exit))
         return out
 
     @staticmethod

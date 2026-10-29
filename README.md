@@ -28,6 +28,7 @@ file"), use the wrapper in the repo root instead: `.\algo.cmd <command>` (or
 .venv/Scripts/algo quote                         # optional smoke test: NIFTY 50 + India VIX
 .venv/Scripts/algo run --algo iron_condor        # start by ~09:40: entry 09:45-10:00 -> 15:35 report
 .venv/Scripts/algo run --algo strangle_scalp     # second window, same time: scalps 09:45-10:30 -> 10:50 report
+.venv/Scripts/algo run --algo weekend_condor     # Fridays (enters 14:45-15:10, holds) and Mondays (buys back ~09:35)
 .venv/Scripts/algo logout                        # when every run has finished (or after closing them)
 ```
 
@@ -110,6 +111,7 @@ src/trading_core/             shared platform (never imports from algos)
   reporting/   end-of-day report files
 src/algos/iron_condor/        the iron condor: config.yaml, filters, strike selector, blow-out exit
 src/algos/strangle_scalp/     the scalp: config.yaml, pair selector (premium / delta), entry signal
+src/algos/weekend_condor/     positional condor: Friday entry, carried over the weekend, Monday exit
 src/algos/_template/          copy this to start a new algo
 tests/                        unit tests + full-day replays of synthetic data
 data/, logs/                  runtime output (git-ignored; the DB holds the daily access token)

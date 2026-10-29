@@ -12,6 +12,7 @@ import numpy as np
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
+from dashboard.queries import carried_in, carried_out
 from trading_core.db import models as m
 from trading_core.db.engine import Database
 from trading_core.marketdata import greeks
@@ -19,7 +20,8 @@ from trading_core.strategy import payoff, registry
 from trading_core.strategy.position import Leg
 
 DOCS = {"iron_condor": "docs/strategy-criteria/iron-condor.md",
-        "strangle_scalp": "docs/strategy-criteria/long-strangle-scalp.md"}
+        "strangle_scalp": "docs/strategy-criteria/long-strangle-scalp.md",
+        "weekend_condor": "docs/strategy-criteria/weekend-iron-condor.md"}
 MAX_CURVE_POINTS = 600
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -120,6 +122,9 @@ def _trade_row(p: m.Position, run: m.AlgoRun, notes: int = 0) -> dict[str, Any]:
         source=run.source, structure=p.structure, status=p.status, trade_no=params.get("trade_no"),
         dte=params.get("dte"), weekday=WEEKDAYS[run.trade_date.weekday()], expiry=_iso(p.expiry),
         entry_time=_iso(p.entry_time), exit_time=_iso(p.exit_time), hold_s=_r(hold, 0),
+        exit_date=_iso(p.exit_time.date()) if p.exit_time else None,
+        carried=bool(p.exit_time and p.entry_time and p.exit_time.date() > p.entry_time.date())
+                or bool((run.config_snapshot or {}).get("carry_overnight")) and p.status in ("OPEN", "OPENING"),
         strikes=_strikes(p), entry_credit=p.entry_credit_pts, exit_debit=p.exit_debit_pts,
         exit_reason=p.exit_reason, gross=_r(p.gross_pnl), charges=_r(p.charges), net=_r(net),
         capital=_r(capital), capital_source=source,
@@ -259,9 +264,16 @@ def strategy_day(db: Database, algo_id: str, day: date, mode: str = "paper", sou
         run_ids = [r.run_id for r in runs]
         found = _positions(s, select(m.Position, m.AlgoRun).join(m.AlgoRun, m.AlgoRun.run_id == m.Position.run_id)
                            .where(m.Position.run_id.in_(run_ids)).order_by(m.Position.position_id))
+        manager = {p.position_id: p.run_id for p, _ in found}
+        # Positions an earlier day's run opened and one of today's runs took over (positional algos).
+        for rid, ps in carried_in(s, runs).items():
+            for cp in ps:
+                found.append((cp, s.get(m.AlgoRun, cp.run_id)))
+                manager[cp.position_id] = rid
+        found.sort(key=lambda pr: pr[0].position_id)
         per_run: dict[int, int] = defaultdict(int)
         for p, _ in found:
-            per_run[p.run_id] += 1
+            per_run[manager[p.position_id]] += 1
         primary = _primary(runs, set(per_run))
         curves = _snapshots(s, [p.position_id for p, _ in found])
         lives = {ls.run_id: ls for ls in s.scalars(select(m.LiveState).where(m.LiveState.run_id.in_(run_ids)))}
@@ -275,7 +287,9 @@ def strategy_day(db: Database, algo_id: str, day: date, mode: str = "paper", sou
         for n, (p, r) in enumerate(found, 1):
             row = _trade_row(p, r)
             row["trade_no"] = n                    # numbered across the day's runs
-            ls = lives.get(p.run_id)
+            row["carried_in"] = p.run_id not in run_ids
+            row["carried_out"] = carried_out(p, day, r.status)
+            ls = lives.get(manager[p.position_id])
             if p.status in ("OPEN", "OPENING") and ls is not None and ls.gross_pnl is not None:
                 row.update(gross=_r(ls.gross_pnl), net=_r(ls.net_pnl), open=True,
                            roi_pct=_r((ls.net_pnl or 0) / row["capital"] * 100, 3) if row["capital"] else None)
@@ -401,6 +415,16 @@ def journal(db: Database, algo_id: str, start: date, end: date, mode: str = "pap
                 positions[p.run_id].append(_trade_row(p, r))
         summaries = {d.run_id: d for d in s.scalars(select(m.DailySummary).where(m.DailySummary.run_id.in_(run_ids)))} \
             if run_ids else {}
+        # Carried trades bought back on a later day show on that day too (positional algos).
+        adopted: dict[str, list] = defaultdict(list)
+        runs_by_day: dict[str, list] = defaultdict(list)
+        for r in runs:
+            runs_by_day[r.trade_date.isoformat()].append(r)
+        for d_iso, rs in runs_by_day.items():
+            for ps in carried_in(s, sorted(rs, key=lambda r: r.run_id)).values():
+                for cp in ps:
+                    if any(l.entry_price is not None for l in cp.legs):
+                        adopted[d_iso].append(_trade_row(cp, s.get(m.AlgoRun, cp.run_id)))
         notes: dict[str, list] = defaultdict(list)
         for n in s.scalars(select(m.JournalNote).where(m.JournalNote.algo_id == algo_id,
                                                        m.JournalNote.trade_date.between(start, end))
@@ -415,11 +439,18 @@ def journal(db: Database, algo_id: str, start: date, end: date, mode: str = "pap
     for d, day_runs in by_day.items():
         if source != "live":
             day_runs = day_runs[-1:]
+        day_trades = []
+        for r in day_runs:
+            for t in positions[r.run_id]:
+                held_on = bool(t["exit_date"] and t["exit_date"] > d) or \
+                    (t["status"] in ("OPEN", "OPENING") and r.status in ("DONE", "SKIPPED"))
+                day_trades.append(dict(t, carried_in=False, carried_out=held_on))
+        day_trades += [dict(t, carried_in=True, carried_out=False) for t in adopted.get(d, [])]
+        day_trades.sort(key=lambda t: t["entry_time"] or "")
         traded = {r.run_id for r in day_runs if positions[r.run_id]}
         primary = _primary(day_runs, traded)
         sms = [summaries[r.run_id] for r in day_runs if r.run_id in summaries]
         nets = [x.net_pnl for x in sms if x.net_pnl is not None]
-        day_trades = [t for r in day_runs for t in positions[r.run_id]]
         for n, t in enumerate(day_trades, 1):
             t["trade_no"] = n
         days.append(dict(
@@ -520,7 +551,7 @@ def performance(db: Database, algo_id: str, start: date, end: date, mode: str = 
     rows.sort(key=lambda r: (r["trade_date"], r["entry_time"] or ""))
     by_day: dict[str, float] = defaultdict(float)
     for r in rows:
-        by_day[r["trade_date"]] += r["net"]
+        by_day[r["exit_date"] or r["trade_date"]] += r["net"]      # a carried trade counts on its exit day
     equity, drawdown, peak, cum = [], [], 0.0, 0.0
     for d in sorted(by_day):
         cum += by_day[d]

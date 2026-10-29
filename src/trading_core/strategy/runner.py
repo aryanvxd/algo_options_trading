@@ -38,8 +38,10 @@ class Runner:
         steps = [(name, ctx.clock.at(getattr(sched, name), ctx.trade_date)) for name in STEPS]
         if algo.state == DONE:                          # resumed after the trade had closed: nothing left
             steps = [("report", ctx.clock.now())]       # to do but the report, so don't wait for 15:35
-        elif algo.state in (IN_TRADE, EXITING):         # resumed after a restart
-            steps = [s for s in steps if s[0] not in ("premarket", "entry")]
+        elif algo.state in (IN_TRADE, EXITING):         # resumed after a restart, or adopted a carried
+            now = ctx.clock.now()                       # position: set up and watch it at once
+            steps = [(n, min(due, now) if n in ("day_check", "start_feed") else due)
+                     for n, due in steps if n not in ("premarket", "entry")]
         log.info("run %s: %s %s (%s, %s)", ctx.run_id, ctx.algo_id, ctx.trade_date, ctx.mode, ctx.source)
 
         try:
@@ -56,6 +58,9 @@ class Runner:
                             steps = [("report", ctx.clock.now())]
                     continue
                 self._service(now)
+                if algo.cfg.report_when_done and algo.state == DONE and steps[0][0] != "report":
+                    steps = [("report", ctx.clock.now())]     # nothing left today but the report
+                    continue
                 ctx.clock.sleep(self._delay(now, due))
         except KeyboardInterrupt:
             log.warning("interrupted — squaring off")

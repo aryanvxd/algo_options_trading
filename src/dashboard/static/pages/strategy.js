@@ -195,11 +195,14 @@
     const s = statusOf(day);
     const running = s[2] && isLiveView();
     const traded = day.trades;
-    const net = traded.reduce((a, t) => a + (t.net ?? 0), 0);
-    const gross = traded.reduce((a, t) => a + (t.gross ?? 0), 0);
-    const charges = traded.reduce((a, t) => a + (t.charges ?? 0), 0);
+    // A trade held past this day (positional algos) counts on the day it closes, not here.
+    const counted = traded.filter((t) => !t.carried_out);
+    const net = counted.reduce((a, t) => a + (t.net ?? 0), 0);
+    const gross = counted.reduce((a, t) => a + (t.gross ?? 0), 0);
+    const charges = counted.reduce((a, t) => a + (t.charges ?? 0), 0);
     const capital = traded.length ? Math.max(...traded.map((t) => t.capital || 0)) : null;
-    const roi = capital ? (net / capital) * 100 : null;
+    const roi = capital && counted.length ? (net / capital) * 100 : null;
+    const heldNote = traded.length && !counted.length ? 'held overnight: counts on the day it closes' : null;
     const maxTrades = day.run.max_trades || 1;
     const lastEvent = [...day.events].reverse().find((e) => !['RESUME'].includes(e.type));
     const banner = day.run.skip_reason ? `<i class="fa-solid fa-circle-info"></i> Skipped: ${App.esc(day.run.skip_reason)}`
@@ -213,10 +216,10 @@
         ${day.live && !day.live.feed_ok && running ? ' · <span class="neg">feed stale</span>' : ''}</span></div>
       ${banner ? `<div class="banner">${banner}</div>` : ''}
       <div class="kpi-strip">
-        ${App.kpi('Net P&amp;L', traded.length ? App.money(net) : '—', App.tone(net), 'fa-indian-rupee-sign', 'tone-green',
-          traded.some((t) => t.open) ? 'open trade marked to market' : 'after charges')}
-        ${App.kpi('Gross P&amp;L', traded.length ? App.money(gross) : '—', App.tone(gross), 'fa-chart-line', 'tone-blue', 'before charges')}
-        ${App.kpi('Charges', traded.length ? App.money(charges, { sign: false }) : '—', '', 'fa-receipt', 'tone-amber', 'brokerage, STT, GST, fees')}
+        ${App.kpi('Net P&amp;L', counted.length ? App.money(net) : '—', App.tone(net), 'fa-indian-rupee-sign', 'tone-green',
+          heldNote || (traded.some((t) => t.open) ? 'open trade marked to market' : 'after charges'))}
+        ${App.kpi('Gross P&amp;L', counted.length ? App.money(gross) : '—', App.tone(gross), 'fa-chart-line', 'tone-blue', heldNote || 'before charges')}
+        ${App.kpi('Charges', counted.length ? App.money(charges, { sign: false }) : '—', '', 'fa-receipt', 'tone-amber', 'brokerage, STT, GST, fees')}
         ${App.kpi('Capital used', capital ? App.money(capital, { sign: false }) : '—', '', 'fa-vault', 'tone-violet',
           traded[0]?.capital_source ? capitalLabel(traded[0].capital_source) : 'margin or premium')}
         ${App.kpi('Return on capital', App.pct(roi), App.tone(roi), 'fa-percent', 'tone-green', 'net ÷ capital used')}
@@ -255,7 +258,9 @@
     premium: 'premium paid + entry charges' }[src] || src);
 
   function tradeCard(t, i, pay) {
-    const head = `Trade ${t.trade_no || i + 1} · ${App.timeOf(t.entry_time)} → ${t.exit_time ? App.timeOf(t.exit_time) : 'open'}`;
+    const head = `Trade ${t.trade_no || i + 1} · ${App.whenOn(t.entry_time, st.date)} → ${t.exit_time ? App.whenOn(t.exit_time, st.date) : (t.carried_out ? 'held' : 'open')}`;
+    const carry = t.carried_in ? App.chip('Carried in', 'tone-violet')
+      : t.carried_out ? App.chip(t.exit_date ? `Carried · closed ${App.whenOn(t.exit_time, st.date)}` : 'Carried overnight', 'tone-violet') : '';
     const legs = t.legs.map((l) => `<tr><td>${App.esc(l.symbol)}</td><td>${l.side === 'BUY' ? App.chip('Buy', 'tone-green') : App.chip('Sell', 'tone-red')}</td>
       <td>${l.qty}</td><td>${App.num(l.entry)}</td><td>${l.exit !== null ? App.num(l.exit) : '—'}</td>
       <td class="${App.tone(l.pnl)}">${App.money(l.pnl)}</td></tr>`).join('');
@@ -265,7 +270,7 @@
         <div><div class="section-title">${head}</div>
           <div class="section-subtitle">${App.esc(t.strikes)} · ${credit !== null ? (credit >= 0 ? `credit ${App.num(credit)} pts` : `cost ${App.num(-credit)} pts`) : ''}
             ${t.dte !== null && t.dte !== undefined ? ` · DTE ${t.dte}` : ''}${t.driver ? ` · driven by ${t.driver}` : ''}</div></div>
-        <div class="chips">${t.open ? App.chip('Open', 'tone-green', isLiveView()) : App.chip(App.reason(t.exit_reason), exitTone(t))}
+        <div class="chips">${carry}${t.open ? App.chip('Open', 'tone-green', isLiveView()) : t.exit_reason ? App.chip(App.reason(t.exit_reason), exitTone(t)) : ''}
           <button class="btn-secondary btn-sm" data-detail="${t.position_id}"><i class="fa-solid fa-magnifying-glass"></i>Details</button></div>
       </div>
       <div class="trade-facts">
@@ -487,7 +492,7 @@
           <th>Capital</th><th>Gross</th><th>Charges</th><th>Net</th><th>ROI</th><th>Exit reason</th><th></th></tr></thead>
         <tbody>${rows.map((t) => `<tr data-detail="${t.position_id}" tabindex="0">
           <td>${t.trade_date} <span class="muted">${t.weekday}</span></td><td>${t.trade_no ?? 1}</td>
-          <td>${App.timeOf(t.entry_time)}</td><td>${App.timeOf(t.exit_time)}</td><td>${App.duration(t.hold_s)}</td>
+          <td>${App.timeOf(t.entry_time)}</td><td>${App.whenOn(t.exit_time, t.trade_date)}</td><td>${App.duration(t.hold_s)}</td>
           <td>${t.dte ?? '—'}</td><td class="mono">${App.esc(t.strikes)}</td><td>${App.num(t.entry_credit)}</td>
           <td title="${App.esc(capitalLabel(t.capital_source))}">${App.money(t.capital, { sign: false })}${t.capital_source === 'estimate' ? '<sup>e</sup>' : ''}</td>
           <td class="${App.tone(t.gross)}">${App.money(t.gross)}</td><td>${App.money(t.charges, { sign: false })}</td>

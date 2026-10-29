@@ -134,6 +134,8 @@ def _run(platform: PlatformConfig, db: Database, algo_id: str, algo_cls: type, c
     algo = algo_cls(ctx, cfg)
     if resumed:
         algo.restore(journal.positions_for_run(run_id))
+    if cfg.carry_overnight and algo.position is None:
+        algo.adopt(journal.open_positions_before(algo_id, mode, source, trade_date))
     Runner(algo).run()
     if source == "live":
         export_recorded_day(platform, db, trade_date, clock.today())

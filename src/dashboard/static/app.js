@@ -72,6 +72,14 @@ const App = (() => {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.round(s % 60);
     return h ? `${h}h ${m}m` : m ? `${m}m ${sec}s` : `${sec}s`;
   }
+  // "09:35" for the same day as ``dayIso``, else "Mon 2 Nov 09:35" (carried positions).
+  function whenOn(iso, dayIso) {
+    if (!iso) return '—';
+    if (!dayIso || iso.slice(0, 10) === dayIso) return timeOf(iso);
+    const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+    const label = new Date(y, m - 1, d).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+    return `${label} ${timeOf(iso, false)}`;
+  }
   const pct = (v, d = 2) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(d)}%`);
 
   // Shared labels and small building blocks used by several pages.
@@ -79,6 +87,7 @@ const App = (() => {
     TIME_EXIT: 'Time exit', STOP_LOSS: 'Stop loss', TARGET: 'Target', PREMIUM_BLOWOUT: 'Premium blow-out',
     KILL_SWITCH: 'Kill switch', STALE_FEED: 'Stale feed', ENTRY_FAILED: 'Entry failed', MAX_DAILY_LOSS: 'Max daily loss',
     TRAILING_STOP: 'Trailing stop', STALL: 'Stalled', MAX_HOLD: 'Max hold time', RESTART_PARTIAL: 'Restart (partial)',
+    CARRY_EXIT: 'Next-day exit',
   };
   const reason = (r) => (r ? r.split(/,\s*/).map((x) => REASONS[x] || x).join(', ') : '—');
   function chip(label, cls, live = false) {
@@ -205,7 +214,7 @@ const App = (() => {
 
   return {
     start, page, api, prefs, toast, chart, destroyCharts, colorFor, navigate,
-    money, num, tone, esc, isoDate, shiftDate, prettyDate, timeOf, duration, pct,
+    money, num, tone, esc, isoDate, shiftDate, prettyDate, timeOf, whenOn, duration, pct,
     REASONS, reason, chip, kpi, emptyState,
     get meta() { return meta; },
   };

@@ -37,14 +37,55 @@ def _position_pnl(pos: m.Position, charges_by_leg: dict[int, float],
     return dict(gross=round(gross, 2), charges=round(charges, 2), net=round(gross - charges, 2), open=False)
 
 
-def _charges_by_leg(s, run_ids: list[int]) -> dict[int, float]:
+def _charges_by_leg(s, leg_ids: list[int]) -> dict[int, float]:
+    """All charges per leg, whichever run placed the order (a carried trade is bought back by a later run)."""
+    if not leg_ids:
+        return {}
     rows = s.execute(
         select(m.Order.leg_id, func.sum(m.OrderCharge.total))
         .join(m.OrderCharge, m.OrderCharge.order_id == m.Order.order_id)
-        .where(m.Order.run_id.in_(run_ids), m.Order.status == "COMPLETE")
+        .where(m.Order.leg_id.in_(leg_ids), m.Order.status == "COMPLETE")
         .group_by(m.Order.leg_id)
     ).all()
     return {leg_id: total or 0.0 for leg_id, total in rows if leg_id is not None}
+
+
+def carried_in(s, runs: list[m.AlgoRun]) -> dict[int, list[m.Position]]:
+    """Positions opened on an earlier day that these runs took over (positional algos), keyed by the
+    run that manages them today: bought back by one of these runs, or still open from before."""
+    if not runs:
+        return {}
+    run_ids = [r.run_id for r in runs]
+    day = runs[0].trade_date
+    managed = (select(m.Leg.position_id).join(m.Order, m.Order.leg_id == m.Leg.leg_id)
+               .where(m.Order.run_id.in_(run_ids), m.Order.purpose == "EXIT"))
+    rows = s.execute(
+        select(m.Position, m.AlgoRun).join(m.AlgoRun, m.AlgoRun.run_id == m.Position.run_id)
+        .options(selectinload(m.Position.legs))
+        .where(m.Position.run_id.not_in(run_ids), m.AlgoRun.trade_date < day,
+               m.Position.position_id.in_(managed) |
+               (m.Position.status.in_(("OPEN", "OPENING")) & m.Position.algo_id.in_({r.algo_id for r in runs})))
+        .order_by(m.Position.position_id)).all()
+    exits = dict(s.execute(select(m.Leg.position_id, m.Order.run_id).join(m.Order, m.Order.leg_id == m.Leg.leg_id)
+                           .where(m.Order.run_id.in_(run_ids), m.Order.purpose == "EXIT")).all())
+    out: dict[int, list[m.Position]] = defaultdict(list)
+    for p, entry_run in rows:
+        if p.position_id not in exits and not (entry_run.config_snapshot or {}).get("carry_overnight"):
+            continue            # an intraday run that crashed open isn't "carried": it is just stale
+        candidates = [r for r in runs if r.algo_id == p.algo_id and r.mode == p.mode and r.source == entry_run.source]
+        if not candidates:
+            continue
+        out[exits.get(p.position_id, candidates[-1].run_id)].append(p)
+    return out
+
+
+def carried_out(p: m.Position, day: date, run_status: str | None) -> bool:
+    """Opened on ``day`` and still held after it: closed on a later day, or open while the run is over."""
+    if p.entry_time is None or p.entry_time.date() != day:
+        return False
+    if p.exit_time is not None:
+        return p.exit_time.date() > day
+    return p.status in ("OPEN", "OPENING") and run_status in ("DONE", "SKIPPED")
 
 
 def _intraday(s, position_ids: list[int]) -> dict[int, list[tuple[str, float]]]:
@@ -78,10 +119,15 @@ def overview(db: Database, day: date, mode: str = "paper", source: str = "live")
         by_run: dict[int, list[m.Position]] = defaultdict(list)
         for p in positions:
             by_run[p.run_id].append(p)
+        adopted_ids: set[int] = set()
+        for rid, ps in carried_in(s, [r for r, _ in runs]).items():
+            by_run[rid].extend(ps)
+            adopted_ids |= {p.position_id for p in ps}
+        all_positions = [p for ps in by_run.values() for p in ps]
         live = {ls.run_id: ls for ls in s.scalars(select(m.LiveState).where(m.LiveState.run_id.in_(run_ids)))}
         summaries = {d.run_id: d for d in s.scalars(select(m.DailySummary).where(m.DailySummary.run_id.in_(run_ids)))}
-        charges_by_leg = _charges_by_leg(s, run_ids) if run_ids else {}
-        intraday = _intraday(s, [p.position_id for p in positions])
+        charges_by_leg = _charges_by_leg(s, [l.leg_id for p in all_positions for l in p.legs])
+        intraday = _intraday(s, [p.position_id for p in all_positions])
 
     # One card per strategy: a live day can have several runs (a restart after the process finished,
     # --force-new, ...), whose trades and P&L add up; the runs themselves are listed too. Replays of
@@ -97,6 +143,8 @@ def overview(db: Database, day: date, mode: str = "paper", source: str = "live")
         gross = charges = net = 0.0
         known = True
         trades, open_count, exits, series = 0, 0, [], []
+        carried = []            # trades held past today: shown, but their P&L counts on the day they close
+        counted = 0             # trades whose P&L counts today
         first = None
         run_rows = []
         best = worst = None
@@ -106,11 +154,19 @@ def overview(db: Database, day: date, mode: str = "paper", source: str = "live")
             for p in by_run.get(run.run_id, []):
                 if not any(l.entry_price is not None for l in p.legs):
                     continue            # rejected before any fill: nothing traded
+                if first is None and p.entry_credit_pts is not None:
+                    first = p
+                if carried_out(p, day, run.status):
+                    trades += 1
+                    run_trades += 1
+                    carried.append(dict(position_id=p.position_id, mark=_r(ls.net_pnl) if ls else None,
+                                        closed_on=p.exit_time.date().isoformat() if p.exit_time else None,
+                                        net=_r(p.net_pnl)))
+                    continue
                 pnl = _position_pnl(p, charges_by_leg, ls)
                 trades += 1
                 run_trades += 1
-                if first is None and p.entry_credit_pts is not None:
-                    first = p
+                counted += 1
                 if pnl["open"]:
                     open_count += 1
                     totals["open_net"] += pnl["net"] or 0.0
@@ -146,18 +202,19 @@ def overview(db: Database, day: date, mode: str = "paper", source: str = "live")
             live_status=ls.status if ls else None, skip_reason=skip_reason,
             runs=run_rows, run_count=len(run_rows),
             trades=trades, open_positions=open_count,
-            gross=_r(gross) if trades else None, charges=_r(charges) if trades else None,
-            net=_r(net) if trades and known else None,
+            gross=_r(gross) if counted else None, charges=_r(charges) if counted else None,
+            net=_r(net) if counted and known else None,
             entry_credit=first.entry_credit_pts if first else None,
             exit_reason=", ".join(exits) or None,
-            max_profit=_r(best), max_drawdown=_r(worst),
+            max_profit=_r(best), max_drawdown=_r(worst), carried=carried,
+            carried_in=sum(1 for r, _ in algo_runs for p in by_run.get(r.run_id, []) if p.position_id in adopted_ids),
             spot=ls.spot if ls else None, vix=ls.vix if ls else None,
             updated_at=ls.updated_at.isoformat() if ls else None,
             started_at=algo_runs[0][0].started_at.isoformat(),
             ended_at=primary.ended_at.isoformat() if primary.ended_at else None,
             intraday=series,
         ))
-        if trades and known:
+        if counted and known:
             totals["gross"] += gross
             totals["charges"] += charges
             totals["net"] += net

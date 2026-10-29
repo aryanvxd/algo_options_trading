@@ -1,0 +1,52 @@
+# NIFTY weekend short iron condor — every tunable number lives here.
+# Spec: docs/strategy-criteria/weekend-iron-condor.md. Times are IST and must be quoted ("14:45").
+# Positional: entered on the last trading day before a weekend, bought back the next trading day.
+
+algo_id: weekend_condor
+name: NIFTY Weekend Iron Condor
+version: "0.1.0"
+description: Sell an iron condor late on Friday, buy it back on Monday morning (weekend time decay).
+mode: paper            # live is disabled in v1
+lots: 1
+capital: 100000        # bucket (proposed): NRML basket margin for 4 legs + 50%; confirm from the first Kite margin
+
+carry_overnight: true  # hold past square-off on the entry day; Monday's run takes the position over
+product: NRML          # overnight margin (MIS would be squared off by Zerodha at ~15:20)
+report_when_done: true # don't sit until 15:30 on a non-entry day or once Monday's exit is done
+
+underlying: NIFTY
+index_symbol: "NIFTY 50"
+vix_symbol: "INDIA VIX"
+strike_step: 50
+
+filters:
+  vix_max: 18                  # W2: skip the weekend at or above this VIX
+  max_premium_ratio: 1.5       # W4: CE vs PE at the short distance
+  min_gap_days: 3              # W1: entry day = next trading day is >= 3 calendar days away (Fri -> Mon)
+  event_min_impact: High       # W3: logged only until the market calendar exists
+
+entry:
+  expected_move_mult: 1.2      # shorts at 1.2 × spot × VIX/100 × sqrt(days to Monday 09:15 / 365) from spot
+  hedge_pts: 200
+  max_spread_pts: 2.0          # W5
+  min_credit_pts: 12           # W6: must pay for the gap risk and ~₹195 of charges
+  subscribe_buffer_pts: 300
+
+exits:
+  pnl_basis: gross
+  stop_loss_points: 10         # 10 × 65 = ₹650 at 1 lot (only from ~09:35 on Monday: nobody watches 09:15-09:35)
+  target_credit_frac: 0.6      # take profit at 60% of the credit
+  premium_blowout_mult: 1.5
+  short_leg_mult: 2.0
+  stale_feed_seconds: 10       # judged only while the market is open
+  exit_from: "09:35"           # Monday: buy back from 09:35 at the first moment every spread is <= 2 pts ...
+  exit_max_spread_pts: 2.0
+  hard_exit: "09:50"           # ... and at any price from 09:50
+
+schedule:
+  day_check: "08:15"           # past-due steps run as soon as the algo starts
+  start_feed: "14:30"          # Friday: no need to watch the market all day
+  entry: "14:45"
+  entry_deadline: "15:10"
+  square_off: "15:28"          # Friday: carry instead; a carried position is closed here if still open
+  report: "15:30"

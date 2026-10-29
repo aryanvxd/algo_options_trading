@@ -66,6 +66,11 @@ class BaseAlgoConfig(BaseModel):
     # Override the platform's runtime intervals for this algo (a scalp needs 1 s, not 5 s).
     tick_snapshot_interval_s: float | None = None
     position_snapshot_interval_s: float | None = None
+    # Positional algos: keep the position open at square-off and let the next trading day's run
+    # adopt it (see ``adopt``). Intraday algos leave this off and are always flat by square-off.
+    carry_overnight: bool = False
+    product: Literal["MIS", "NRML"] = "MIS"           # for the broker margin lookup (NRML = held overnight)
+    report_when_done: bool = False                    # write the report as soon as the day's work is over
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
 
 
@@ -115,6 +120,7 @@ class BaseAlgo(ABC):
         self.position: Position | None = None          # the trade being opened / held / closed now
         self.trades: list[Position] = []               # every position today that got a fill
         self.realized_net = 0.0                        # net P&L of today's finished trades
+        self.adopted = False                           # today's position was carried in from an earlier day
         self.executor = LegExecutor(ctx)
         self._risk: RiskEngine | None = None
         self.kill_requested = False
@@ -258,8 +264,30 @@ class BaseAlgo(ABC):
             else:
                 self.skip("square-off time reached without entry")
         elif self.state == IN_TRADE:
+            if self.cfg.carry_overnight and self.position is not None and self.carry_today():
+                self.notes.append("position carried to the next trading day")
+                self.event("CARRY", f"holding {self.position.structure} (position {self.position.position_id}) "
+                                    "overnight: the next trading day's run takes it over")
+                return
             self._start_exit(ExitSignal("TIME_EXIT", "scheduled square-off"))
             self._monitor(self.ctx.clock.now())
+
+    def carry_today(self) -> bool:
+        """Positional algos: whether to hold the open position past today's square-off."""
+        return True
+
+    def adopt(self, positions: list[Position]) -> None:
+        """Take over positions an earlier day's run left open (``carry_overnight``)."""
+        if not positions:
+            return
+        self.trades = list(positions)
+        self.position = positions[-1]
+        self.state = IN_TRADE
+        self._risk = None
+        self.adopted = True
+        self.event("ADOPT", f"took over position {self.position.position_id} ({self.position.structure}) opened "
+                            f"{self.position.entry_time:%a %d %b %H:%M}", level="WARNING",
+                   position_id=self.position.position_id)
 
     def restore(self, positions: list[Position]) -> None:
         """Resume after a restart: pick up the day's position from the DB."""
@@ -413,7 +441,7 @@ class BaseAlgo(ABC):
         try:
             return self.ctx.kite.basket_margin([
                 dict(exchange=l.exchange, tradingsymbol=l.tradingsymbol, transaction_type=l.side,
-                     variety="regular", product="MIS", order_type="MARKET", quantity=l.qty, price=0)
+                     variety="regular", product=self.cfg.product, order_type="MARKET", quantity=l.qty, price=0)
                 for l in legs])
         except Exception as e:  # noqa: BLE001 - capital is for reporting only; never block a trade
             self.log.warning("basket margin lookup failed (%s); using the worst-case estimate", e)
@@ -452,8 +480,10 @@ class BaseAlgo(ABC):
             notes.insert(0, f"skipped: {self.skip_reason}")
         if len(trades) > 1:
             notes.insert(0, f"{len(trades)} trades")
-        if traded and not closed:
+        if traded and not closed and not self.cfg.carry_overnight:
             notes.append("position still open at report time")
+        if self.adopted:
+            notes.insert(0, "position carried in from an earlier day")
         gross = round(sum(p.realized_gross for p in trades), 2)
         charges = round(sum(p.total_charges for p in trades), 2)
         reasons = ",".join(p.exit_reason for p in trades if p.exit_reason)[:40]

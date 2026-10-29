@@ -187,7 +187,10 @@
     const pnl = traded ? (s.net ?? s.gross) : null;
     const reason = s.exit_reason ? s.exit_reason.split(', ').map((r) => REASONS[r] || r).join(', ') : null;
     let note = '';
-    if (s.status === 'SKIPPED') note = `<i class="fa-solid fa-circle-info"></i> ${App.esc(s.skip_reason || 'Skipped')}`;
+    if (s.carried?.length) note = `<i class="fa-solid fa-moon"></i> ${s.carried.length} trade${s.carried.length === 1 ? '' : 's'} held overnight`
+      + s.carried.map((c) => (c.closed_on ? ` · closed ${App.prettyDate(c.closed_on)}: ${App.money(c.net)}` : c.mark !== null ? ` · last mark ${App.money(c.mark)}` : '')).join('')
+      + ' (counted on the day it closes)';
+    else if (s.status === 'SKIPPED') note = `<i class="fa-solid fa-circle-info"></i> ${App.esc(s.skip_reason || 'Skipped')}`;
     else if (traded && (s.max_profit !== null || s.max_drawdown !== null))
       note = `Best ${App.money(s.max_profit)} · worst ${App.money(s.max_drawdown)} during the trade`;
     const sub = state.source === 'replay' ? `Replay run #${s.run_id}` : (s.spot ? `NIFTY ${App.num(s.spot, 1)} · VIX ${App.num(s.vix, 2)}` : `Run #${s.run_id}`);
