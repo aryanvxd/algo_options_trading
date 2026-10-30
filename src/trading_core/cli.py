@@ -77,7 +77,9 @@ def cmd_instruments(args: argparse.Namespace, platform: PlatformConfig) -> int:
     clock = LiveClock()
     db = _db(platform)
     client = KiteClient.from_db(db, platform.kite, load_secrets(platform.root), clock)
-    n = InstrumentStore(db, platform.instruments).refresh_from_kite(client, clock.today())
+    from trading_core.config import equity_symbols
+
+    n = InstrumentStore(db, platform.instruments).refresh_from_kite(client, clock.today(), equity_symbols(platform))
     print(f"Stored {n} instruments for {clock.today()}.")
     return 0
 

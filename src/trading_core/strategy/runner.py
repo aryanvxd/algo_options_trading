@@ -127,7 +127,9 @@ class Runner:
             if restore_instruments(MarketStore(ctx.platform.marketdata.dir), ctx.instruments, ctx.trade_date):
                 return
             raise SkipDay(f"no instrument snapshot stored for {ctx.trade_date}")
-        ctx.instruments.refresh_from_kite(ctx.kite, ctx.trade_date)
+        from trading_core.config import equity_symbols
+
+        ctx.instruments.refresh_from_kite(ctx.kite, ctx.trade_date, equity_symbols(ctx.platform))
 
     def _drain_exit(self, max_attempts: int = 30) -> None:
         """Keep retrying an exit (e.g. at square-off) until flat or attempts run out."""

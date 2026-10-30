@@ -107,7 +107,12 @@ class Position:
 
     @property
     def unit_qty(self) -> int:
-        return min(l.qty for l in self.legs)
+        """Quantity of one unit of the structure. Legs on the same instrument (one option bought as
+        lot A + lot B) add up, so a split position still reads as one option's price per unit."""
+        by_token: dict[int, int] = {}
+        for l in self.legs:
+            by_token[l.instrument_token] = by_token.get(l.instrument_token, 0) + l.qty
+        return min(by_token.values())
 
     @property
     def open_legs(self) -> list[Leg]:

@@ -19,7 +19,8 @@ from trading_core.marketdata import greeks
 from trading_core.strategy import payoff, registry
 from trading_core.strategy.position import Leg
 
-DOCS = {"iron_condor": "docs/strategy-criteria/iron-condor.md",
+DOCS = {"directional_scalp": "docs/strategy-criteria/directional-scalp.md",
+        "iron_condor": "docs/strategy-criteria/iron-condor.md",
         "strangle_scalp": "docs/strategy-criteria/long-strangle-scalp.md",
         "weekend_condor": "docs/strategy-criteria/weekend-iron-condor.md"}
 MAX_CURVE_POINTS = 600
@@ -106,9 +107,11 @@ def _capital(p: m.Position) -> tuple[float | None, str | None]:
 
 
 def _strikes(p: m.Position) -> str:
-    parts = []
+    parts: list[str] = []
     for l in sorted(p.legs, key=lambda l: (l.strike or 0)):
-        parts.append(f"{'+' if l.side == 'BUY' else '−'}{int(l.strike) if l.strike else '?'}{l.option_type or ''}")
+        label = f"{'+' if l.side == 'BUY' else '−'}{int(l.strike) if l.strike else '?'}{l.option_type or ''}"
+        if label not in parts:              # lot A + lot B of one option is one strike
+            parts.append(label)
     return " ".join(parts)
 
 

@@ -5,7 +5,8 @@
     `static/pages/calendar.js`.
   - India list: `config/calendar/india_2026_27.yaml`.
   - Data: migration 0004.
-  - Advances/declines (section 5) is still a plan.
+  - Advances/declines (section 5): live NIFTY 50 breadth built 30 Oct 2026
+    (`trading_core/market/breadth.py`, first used by the directional scalp). NIFTY 500 is still a plan.
 - **Scope:**
   - a **Calendar** page in the dashboard, in our own UI, with the same content as Sensibull's
     stock-market calendar (economic events, company results, holidays);

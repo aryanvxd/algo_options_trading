@@ -1,0 +1,58 @@
+# NIFTY 50 index weights (%), for the free-float-weighted advance/decline (directional scalp, B1).
+# Source: NSE Indices constituent list as on 19 Aug 2026 (published by Taurus Mutual Fund).
+# BSE joined on 30 Sep 2026 in place of WIPRO; its weight is an estimate: WIPRO's 0.44% scaled by the
+# two stocks' 6-month average free-float market cap (₹1,40,879 cr vs ₹55,930 cr) = ~1.11%.
+# Weights are re-normalised to 100 when loaded, so small drifts don't matter.
+# Update monthly from NSE's factsheet / constituent list, and whenever the index changes (Mar, Sep).
+as_of: 2026-08-19
+weights:
+  ADANIENT: 0.78
+  ADANIPORTS: 1.13
+  APOLLOHOSP: 0.82
+  ASIANPAINT: 1.08
+  AXISBANK: 3.22
+  BAJAJ-AUTO: 1.17
+  BAJAJFINSV: 1.06
+  BAJFINANCE: 2.63
+  BEL: 1.33
+  BHARTIARTL: 5.30
+  BSE: 1.11           # estimate, see above
+  CIPLA: 0.73
+  COALINDIA: 0.87
+  DRREDDY: 0.65
+  EICHERMOT: 1.00
+  ETERNAL: 2.10
+  GRASIM: 1.12
+  HCLTECH: 1.27
+  HDFCBANK: 10.01
+  HDFCLIFE: 0.52
+  HINDALCO: 1.37
+  HINDUNILVR: 1.63
+  ICICIBANK: 9.11
+  INDIGO: 1.07
+  INFY: 3.56
+  ITC: 2.34
+  JIOFIN: 0.72
+  JSWSTEEL: 1.09
+  KOTAKBANK: 2.61
+  LT: 4.29
+  M&M: 2.77
+  MARUTI: 1.62
+  MAXHEALTH: 0.67
+  NESTLEIND: 0.95
+  NTPC: 1.45
+  ONGC: 0.84
+  POWERGRID: 1.08
+  RELIANCE: 8.04
+  SBILIFE: 0.73
+  SBIN: 3.93
+  SHRIRAMFIN: 1.41
+  SUNPHARMA: 1.83
+  TATACONSUM: 0.63
+  TATASTEEL: 1.38
+  TCS: 2.12
+  TECHM: 0.92
+  TITAN: 1.90
+  TMPV: 0.61
+  TRENT: 0.89
+  ULTRACEMCO: 1.23

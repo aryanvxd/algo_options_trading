@@ -146,8 +146,9 @@ def test_calendar_api_lists_events_holidays_expiries_and_algo_days(platform, db)
     assert cal["expiries"] == [dict(date="2026-11-03", weekday="Tue", underlying="NIFTY", monthly=True)]
     fri = {a["algo_id"]: a["role"] for a in cal["algo_days"]["2026-10-30"]}
     mon = {a["algo_id"]: a["role"] for a in cal["algo_days"]["2026-11-02"]}
-    assert fri == {"iron_condor": "trade", "weekend_condor": "entry"}           # scalp: Mon/Tue only
-    assert mon == {"iron_condor": "trade", "strangle_scalp": "trade", "weekend_condor": "exit"}
+    assert fri == {"iron_condor": "trade", "directional_scalp": "trade", "weekend_condor": "entry"}  # scalp: Mon/Tue
+    assert mon == {"iron_condor": "trade", "directional_scalp": "trade", "strangle_scalp": "trade",
+                   "weekend_condor": "exit"}
     assert "2026-10-31" not in cal["algo_days"]                                    # Saturday
     assert cal["sources"]["forexfactory"]["status"] == "OK"
     assert client.post("/api/calendar/refresh", headers={"X-Algo-Desk": ""}).status_code == 403

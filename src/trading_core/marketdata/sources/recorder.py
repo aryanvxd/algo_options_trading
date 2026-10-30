@@ -61,10 +61,11 @@ def export_day(db: Database, store: MarketStore, manifest: Manifest, day: date) 
                 ts=_naive(t.ts), trade_date=day, instrument_token=t.instrument_token, underlying=inst.name,
                 expiry=inst.expiry, strike=inst.strike, opt_type=inst.instrument_type, ltp=t.ltp, bid=t.bid,
                 ask=t.ask, bid_qty=t.bid_qty, ask_qty=t.ask_qty, oi=t.oi, volume=t.volume, source=SOURCE))
-        elif inst.segment in ("INDICES", "NFO-FUT"):     # futures: last price only, like an index
+        elif inst.segment in ("INDICES", "NFO-FUT", "NSE"):    # futures and stocks: price and volume, like an index
             index[inst.tradingsymbol].append(dict(ts=_naive(t.ts), trade_date=day,
                                                   instrument_token=t.instrument_token,
-                                                  symbol=inst.tradingsymbol, ltp=t.ltp, source=SOURCE))
+                                                  symbol=inst.tradingsymbol, ltp=t.ltp, volume=t.volume,
+                                                  source=SOURCE))
         else:
             unknown += 1
 
@@ -120,7 +121,7 @@ def read_ticks(store: MarketStore, day: date) -> list[pa.Table]:
     for dataset in ("options_ticks", "index_ticks"):
         base = store.root / dataset
         for path in base.glob(f"*/year={day.year}/date={day.isoformat()}/part-{SOURCE}.parquet"):
-            out.append(pq.read_table(path, columns=["ts", "instrument_token", "ltp"]
-                                     + (["bid", "ask", "bid_qty", "ask_qty", "oi", "volume"]
-                                        if dataset == "options_ticks" else [])))
+            extra = ["bid", "ask", "bid_qty", "ask_qty", "oi", "volume"] if dataset == "options_ticks" else ["volume"]
+            have = set(pq.read_schema(path).names)          # older index files have no volume column
+            out.append(pq.read_table(path, columns=["ts", "instrument_token", "ltp"] + [c for c in extra if c in have]))
     return out

@@ -51,6 +51,8 @@ class PaperConfig(BaseModel):
 
 class InstrumentsConfig(BaseModel):
     nfo_underlyings: list[str] = Field(default_factory=lambda: ["NIFTY"])
+    # NSE cash stocks kept in the daily snapshot (for live breadth): universes in config/universes.
+    equity_universes: list[str] = Field(default_factory=lambda: ["nifty50"])
     keep_days: int = 30
 
 
@@ -149,6 +151,14 @@ def deep_merge(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
             out[k] = deep_merge(out[k], v)
         else:
             out[k] = v
+    return out
+
+
+def equity_symbols(platform: PlatformConfig) -> set[str]:
+    """NSE stock symbols the instrument snapshot keeps (every universe in ``equity_universes``)."""
+    out: set[str] = set()
+    for name in platform.instruments.equity_universes:
+        out |= {k.split(":", 1)[-1] for k in load_universe(platform, name)}
     return out
 
 

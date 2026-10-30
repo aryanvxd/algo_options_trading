@@ -221,6 +221,8 @@ body {
 @media (max-width: 720px) {
   #main-content { padding: 16px; }
   .strategy-grid { grid-template-columns: 1fr; }
+  .card-head { flex-wrap: wrap; }                    /* status chips go under the title */
+  .card-head > .chips { justify-content: flex-start; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -307,6 +309,13 @@ textarea.input-field { height: auto; resize: vertical; font-family: inherit; lin
 .meter-bar { height: 6px; background: var(--bg); border-radius: 999px; overflow: hidden; }
 .meter-fill { height: 100%; background: var(--warn); border-radius: 999px; transition: width 0.3s; }
 .meter-fill.ok { background: var(--profit); }
+.meter-fill.bear { background: var(--loss); }
+.meter-bar.signed { position: relative; display: flex; }
+.meter-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--muted); opacity: 0.5; }
+.bricks { display: flex; flex-wrap: wrap; gap: 3px; align-items: flex-end; min-height: 22px; margin: 6px 0; }
+.brick { width: 12px; height: 18px; border-radius: 2px; }
+.brick.up { background: var(--profit); }
+.brick.down { background: var(--loss); margin-top: 6px; }
 
 details.spec summary { cursor: pointer; font-size: 0.86rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .spec-text { white-space: pre-wrap; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.76rem; line-height: 1.5; color: var(--text);

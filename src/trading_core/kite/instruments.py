@@ -45,10 +45,13 @@ def _to_info(r: m.Instrument) -> InstrumentInfo:
 
 
 def filter_rows(nfo: Iterable[dict[str, Any]], nse: Iterable[dict[str, Any]],
-                underlyings: list[str]) -> list[dict[str, Any]]:
-    wanted = set(underlyings)
+                underlyings: list[str], equities: Iterable[str] = ()) -> list[dict[str, Any]]:
+    wanted, stocks = set(underlyings), set(equities)
     out = [r for r in nfo if r.get("segment") in ("NFO-OPT", "NFO-FUT") and r.get("name") in wanted]
+    nse = list(nse)
     out += [r for r in nse if r.get("segment") == "INDICES"]
+    out += [r for r in nse if r.get("segment") == "NSE" and r.get("instrument_type") == "EQ"
+            and r.get("tradingsymbol") in stocks]
     return out
 
 
@@ -84,8 +87,8 @@ class InstrumentStore:
             s.execute(delete(m.Instrument).where(m.Instrument.as_of_date < cutoff))
         return len(records)
 
-    def refresh_from_kite(self, client: Any, as_of: date) -> int:
-        rows = filter_rows(client.instruments("NFO"), client.instruments("NSE"), self.cfg.nfo_underlyings)
+    def refresh_from_kite(self, client: Any, as_of: date, equities: Iterable[str] = ()) -> int:
+        rows = filter_rows(client.instruments("NFO"), client.instruments("NSE"), self.cfg.nfo_underlyings, equities)
         n = self.save_snapshot(as_of, rows)
         log.info("instrument snapshot %s: %d rows", as_of, n)
         return n
@@ -119,6 +122,15 @@ class InstrumentStore:
                 m.Instrument.as_of_date == as_of, m.Instrument.exchange == exchange,
                 m.Instrument.tradingsymbol == tradingsymbol)).first()
             return _to_info(r) if r else None
+
+    def equities(self, symbols: Iterable[str], as_of: date) -> dict[str, InstrumentInfo]:
+        """NSE cash stocks in the snapshot, by symbol (missing ones are simply absent)."""
+        symbols = list(symbols)
+        with self.db.session() as s:
+            rows = s.scalars(select(m.Instrument).where(
+                m.Instrument.as_of_date == as_of, m.Instrument.segment == "NSE",
+                m.Instrument.tradingsymbol.in_(symbols))).all()
+            return {r.tradingsymbol: _to_info(r) for r in rows}
 
     def by_tokens(self, tokens: Iterable[int], as_of: date) -> dict[int, InstrumentInfo]:
         tokens = list(tokens)

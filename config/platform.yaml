@@ -33,6 +33,7 @@ paper:
 
 instruments:
   nfo_underlyings: [NIFTY]       # option chains stored daily (keep this list small)
+  equity_universes: [nifty50]    # NSE stocks stored daily too (live breadth: config/universes/<name>.yaml)
   keep_days: 30                  # older instrument snapshots are pruned
 
 runtime:

@@ -87,7 +87,8 @@ const App = (() => {
     TIME_EXIT: 'Time exit', STOP_LOSS: 'Stop loss', TARGET: 'Target', PREMIUM_BLOWOUT: 'Premium blow-out',
     KILL_SWITCH: 'Kill switch', STALE_FEED: 'Stale feed', ENTRY_FAILED: 'Entry failed', MAX_DAILY_LOSS: 'Max daily loss',
     TRAILING_STOP: 'Trailing stop', STALL: 'Stalled', MAX_HOLD: 'Max hold time', RESTART_PARTIAL: 'Restart (partial)',
-    CARRY_EXIT: 'Next-day exit',
+    CARRY_EXIT: 'Next-day exit', RENKO_REVERSAL: 'Renko reversal', TIME_STOP: 'Time stop', BIAS_FLIP: 'Bias flip',
+    BREAKEVEN_STOP: 'Breakeven stop', MANAGED: 'Closed by algo',
   };
   const reason = (r) => (r ? r.split(/,\s*/).map((x) => REASONS[x] || x).join(', ') : '—');
   function chip(label, cls, live = false) {

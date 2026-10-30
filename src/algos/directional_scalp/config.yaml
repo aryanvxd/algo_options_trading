@@ -1,0 +1,78 @@
+# NIFTY directional buying scalp — every tunable number lives here.
+# Spec: docs/strategy-criteria/directional-scalp.md. Times are IST and must be quoted ("09:45").
+# The thresholds are starting points: tune them from the backtest and the paper days' logs.
+
+algo_id: directional_scalp
+name: NIFTY Directional Scalp
+version: "0.1.0"
+description: Buy the ATM CE or PE when breadth, premium skew and VWAP lean one way and Renko prints two bricks; up to 5 trades 09:45-11:00.
+mode: paper            # live is disabled in v1
+lots: 2                # lot A books the first target, lot B trails
+capital: 35000         # bucket: 2 lots of the dearest ATM (~₹180 on 3-4 DTE ≈ ₹23,400) plus a buffer
+trade_weekdays: [Mon, Tue, Wed, Thu, Fri]
+split_lots: true
+
+max_trades: 5
+reentry_cooldown_s: 120        # D2: 2 minutes between an exit and the next entry
+tick_snapshot_interval_s: 2    # 50 stocks + strikes every 2 s (the trigger uses 1-minute closes)
+position_snapshot_interval_s: 1
+
+underlying: NIFTY
+index_symbol: "NIFTY 50"
+vix_symbol: "INDIA VIX"
+
+bias:
+  every_s: 5
+  log_every_s: 60
+  breadth_universe: nifty50    # weights: config/universes/nifty50_weights.yaml (update monthly)
+  breadth_full: 40             # B1: weighted A/D +40 -> +1, -40 -> -1
+  breadth_min_coverage: 60     # % of index weight that must have a price
+  skew_distance_pts: 300       # B2: PE vs CE at spot ± 300 (same measure as the iron condor's E4)
+  skew_bull_ratio: 0.95        #     PE/CE <= 0.95 (calls richer) -> +1
+  skew_bear_ratio: 1.45        #     PE/CE >= 1.45 (puts richer)  -> -1
+  vwap_full_pts: 15            # B3: futures 15 pts above VWAP -> +1
+  w_breadth: 0.4
+  w_skew: 0.3
+  w_vwap: 0.3
+  threshold: 0.5               # CE when score >= +0.5, PE when <= -0.5, breadth agreeing ...
+  hold_s: 120                  # ... for 2 minutes
+  flip_exit: 0.3               # exit an open trade when the score goes 0.3 the other way
+
+trigger:
+  brick_pts: 10                # Renko on NIFTY spot, from 1-minute closes
+  bricks: 2                    # T1: two bricks in a row in the bias direction
+  max_vwap_extension_bricks: 2 # T2: logged; enforced only with enforce_extension
+  enforce_extension: false
+
+option:
+  strike_step: 50
+  itm_fallback: true           # O1: one strike in the money if ATM fails a check
+  max_spread_pts: 0.50         # O2
+  max_quote_age_s: 3           # O3
+  premium_min: 40              # O4
+  premium_max: 250
+  subscribe_range_pts: 600
+  resubscribe_drift_pts: 200
+
+limits:
+  max_consecutive_losses: 3    # D3
+  max_day_loss: 3000           # D4: net rupees (also exits an open trade)
+  profit_lock_trigger: 2500    # D5: once the day has been +₹2,500 ...
+  profit_lock_floor: 1500      #     ... stop if it falls back to +₹1,500
+  max_direction_changes: 2     # D6
+
+exits:
+  hard_stop_pts: 8             # option 8 pts below entry (8 × 130 = ₹1,040 at 2 lots)
+  lot_a_target_pts: 12         # book lot A at +12 ...
+  breakeven_buffer_pts: 0.5    # ... then lot B exits if it falls back to entry + 0.5
+  lot_b_target_pts: 30         # lot B's cap
+  time_stop_s: 300             # no new brick in the trade's favour for 5 minutes
+  stale_feed_seconds: 5
+
+schedule:
+  day_check: "08:15"           # past-due steps run as soon as the algo starts (~09:35)
+  start_feed: "09:15"
+  entry: "09:45"
+  entry_deadline: "11:00"      # no new trade after this
+  square_off: "11:30"
+  report: "11:35"

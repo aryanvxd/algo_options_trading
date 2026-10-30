@@ -7,6 +7,8 @@ An algo subclass implements only what is specific to it:
   build_entry()    return a Position to open, None to retry next loop, or raise SkipDay
   build_exit_rules()  ordered list of ExitRule (first match wins)
   reentry_block()  (only for ``max_trades`` > 1) why no further trade may be taken now, or None
+  manage_open()    (optional) act on an open trade before the exit rules, e.g. ``close_legs`` to
+                   book part of it
 
 Everything else — order execution, mark-to-market, exits, snapshots, live state, kill switch,
 daily summary — is handled here, identically for every algo.
@@ -178,6 +180,25 @@ class BaseAlgo(ABC):
                    window=f"{start:%a %d %b %H:%M} - {end:%a %d %b %H:%M}",
                    events=[f"{e.ts:%a %H:%M} {e.country} {e.title} ({e.impact})" for e in found][:10])
         return found
+
+    def manage_open(self, now: datetime, mark: Mark) -> None:
+        """Called every loop while a trade is open, before its exit rules (e.g. book part of it)."""
+
+    def close_legs(self, legs: list, reason: str) -> bool:
+        """Close some legs of the open trade now (a partial exit); the rest stay open under the
+        exit rules. Returns True when every one of them filled."""
+        pos = self.position
+        assert pos is not None
+        legs = [l for l in legs if l.is_open]
+        ok = all([self.executor.send(l, "EXIT", force=True) for l in legs])
+        self.ctx.journal.update_position(pos)
+        done = [l for l in legs if not l.is_open]
+        if done:
+            gross = round(sum(l.realized_pnl or 0.0 for l in done), 2)
+            self.event("PARTIAL_EXIT", f"{reason}: closed {', '.join(l.role for l in done)} "
+                                       f"at {', '.join(f'{l.exit_price:.2f}' for l in done)} (gross ₹{gross:.2f})",
+                       legs={l.role: l.exit_price for l in done}, gross=gross, reason=reason)
+        return ok
 
     def reentry_block(self, now: datetime) -> str | None:
         """Why no further trade may be taken today (None = keep looking for entries)."""
@@ -387,6 +408,15 @@ class BaseAlgo(ABC):
             day = round(self.realized_net + mark.net_pnl, 2)     # the day so far, across trades
             self.max_net = day if self.max_net is None else max(self.max_net, day)
             self.min_net = day if self.min_net is None else min(self.min_net, day)
+
+        if self.state == IN_TRADE and mark.complete:
+            open_before = len(pos.open_legs)
+            self.manage_open(now, mark)
+            if pos.is_flat:                                # the hook closed everything itself
+                self._start_exit(ExitSignal("MANAGED", "closed by the algo"))
+            elif len(pos.open_legs) != open_before:       # part of it was booked: re-mark the rest
+                mark = pos.mark(self.ctx.feed.latest, self.ctx.charges, now)
+                self.last_mark = mark
 
         if self.state == IN_TRADE:
             signal = self.risk.evaluate(RiskContext(

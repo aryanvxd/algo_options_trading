@@ -1,6 +1,8 @@
 # NIFTY 50 constituents used for pre-open gainers/losers and advance/decline.
 # NSE reshuffles the index twice a year — update this list when it changes.
 # Symbols Kite does not recognise are simply ignored (and logged).
+# Last change: BSE replaced WIPRO from 30 Sep 2026 (NSE Indices semi-annual review).
+# Index weights for the weighted advance/decline are in nifty50_weights.yaml.
 name: nifty50
 exchange: NSE
 symbols:
@@ -13,6 +15,7 @@ symbols:
   - BAJFINANCE
   - BAJAJFINSV
   - BEL
+  - BSE
   - BHARTIARTL
   - CIPLA
   - COALINDIA
@@ -53,4 +56,3 @@ symbols:
   - TITAN
   - TRENT
   - ULTRACEMCO
-  - WIPRO

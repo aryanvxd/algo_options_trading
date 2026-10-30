@@ -98,6 +98,47 @@ class Journal:
                 .order_by(m.MarketBreadth.id.desc())
             ).first()
 
+    # ------------------------------------------------------------ reference data fetched on the day
+
+    def save_prev_closes(self, trade_date: date, closes: dict[int, tuple[str, float]], now: datetime,
+                         source: str = "kite_quote") -> int:
+        """``closes``: {token: (symbol, previous close)}; replaces that day's rows for those tokens."""
+        if not closes:
+            return 0
+        with self.db.session() as s:
+            s.execute(delete(m.PrevClose).where(m.PrevClose.trade_date == trade_date,
+                                                m.PrevClose.instrument_token.in_(list(closes))))
+            s.execute(insert(m.PrevClose), [dict(trade_date=trade_date, instrument_token=tok, symbol=sym,
+                                                 prev_close=close, source=source, captured_at=now)
+                                            for tok, (sym, close) in closes.items()])
+        return len(closes)
+
+    def prev_closes(self, trade_date: date) -> dict[int, float]:
+        with self.db.session() as s:
+            return {r.instrument_token: r.prev_close
+                    for r in s.scalars(select(m.PrevClose).where(m.PrevClose.trade_date == trade_date))}
+
+    def save_bars(self, trade_date: date, token: int, bars: Iterable[dict[str, Any]],
+                  source: str = "kite_historical") -> int:
+        """1-minute candles (``ts`` = candle start); a candle already stored for that minute is replaced."""
+        rows = [dict(trade_date=trade_date, instrument_token=token, ts=b["ts"], open=b.get("open"),
+                     high=b.get("high"), low=b.get("low"), close=b["close"], volume=b.get("volume"), source=source)
+                for b in bars if b.get("close") is not None]
+        if not rows:
+            return 0
+        with self.db.session() as s:
+            s.execute(delete(m.IntradayBar).where(m.IntradayBar.instrument_token == token,
+                                                  m.IntradayBar.ts.in_([r["ts"] for r in rows])))
+            s.execute(insert(m.IntradayBar), rows)
+        return len(rows)
+
+    def bars(self, trade_date: date, token: int, before: datetime | None = None) -> list[m.IntradayBar]:
+        q = select(m.IntradayBar).where(m.IntradayBar.trade_date == trade_date, m.IntradayBar.instrument_token == token)
+        if before is not None:
+            q = q.where(m.IntradayBar.ts < before)
+        with self.db.session() as s:
+            return list(s.scalars(q.order_by(m.IntradayBar.ts)))
+
     def event(self, run_id: int | None, algo_id: str | None, now: datetime, type_: str, message: str,
               level: str = "INFO", data: dict[str, Any] | None = None) -> None:
         with self.db.session() as s:

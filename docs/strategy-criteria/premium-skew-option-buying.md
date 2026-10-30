@@ -1,7 +1,7 @@
 # CE/PE premium-skew directional option buying — note for later
 
-- **Status:** idea only. Not designed or built; revisit after the iron condor has 4–6 weeks of
-  paper data.
+- **Status:** folded into the [directional buying scalp](directional-scalp.md) on 30 Oct 2026,
+  as one part of its bias score (B2). Kept for the history of the idea.
 - **Last changed:** 26 Oct 2026.
 
 ## Idea

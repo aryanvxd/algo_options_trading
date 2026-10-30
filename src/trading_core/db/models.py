@@ -373,6 +373,40 @@ class CalendarSource(Base):
     note: Mapped[str | None] = mapped_column(Text)
 
 
+class PrevClose(Base):
+    """Previous session's close of an instrument, fetched on the trade day (live breadth needs it;
+    replays read it back instead of calling Kite)."""
+    __tablename__ = "prev_closes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trade_date: Mapped[date]
+    instrument_token: Mapped[int] = mapped_column(BigInteger)
+    symbol: Mapped[str] = mapped_column(String(40))
+    prev_close: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(20))            # kite_quote | test
+    captured_at: Mapped[datetime]
+
+    __table_args__ = (Index("ix_prev_close_day_token", "trade_date", "instrument_token", unique=True),)
+
+
+class IntradayBar(Base):
+    """1-minute candles fetched from Kite on the trade day (warm-up for Renko/VWAP before the algo
+    started); kept so a replay of that day warms up the same way."""
+    __tablename__ = "intraday_bars"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trade_date: Mapped[date]
+    instrument_token: Mapped[int] = mapped_column(BigInteger)
+    ts: Mapped[datetime]                                       # candle start (IST)
+    open: Mapped[float | None] = mapped_column(Float)
+    high: Mapped[float | None] = mapped_column(Float)
+    low: Mapped[float | None] = mapped_column(Float)
+    close: Mapped[float] = mapped_column(Float)
+    volume: Mapped[int | None] = mapped_column(BigInteger)
+    source: Mapped[str] = mapped_column(String(20))            # kite_historical | test
+
+    __table_args__ = (Index("ix_bars_token_ts", "instrument_token", "ts", unique=True),
+                      Index("ix_bars_day", "trade_date"))
+
+
 # ---------------------------------------------------------------- market data (Parquet store manifest)
 
 class MarketDataFile(Base):

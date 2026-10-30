@@ -29,12 +29,17 @@ file"), use the wrapper in the repo root instead: `.\algo.cmd <command>` (or
 .venv/Scripts/algo run --algo iron_condor        # start by ~09:40: entry 09:45-10:00 -> 15:35 report
 .venv/Scripts/algo run --algo strangle_scalp     # second window, same time: scalps 09:45-10:30 -> 10:50 report
 .venv/Scripts/algo run --algo weekend_condor     # Fridays (enters 14:45-15:10, holds) and Mondays (buys back ~09:35)
+.venv/Scripts/algo run --algo directional_scalp  # every day: CE or PE buys 09:45-11:00 -> 11:35 report (Mondays: see below)
 .venv/Scripts/algo logout                        # when every run has finished (or after closing them)
 ```
 
 Each algo runs in its own window (Kite allows 3 WebSocket connections per API key). The iron
 condor trades every trading day; the scalp trades Mondays and Tuesdays, up to 3 trades, and
-records the book every second while it runs. Instead of typing `algo run`, you can press
+records the book every second while it runs. The directional scalp trades every day, up to 5
+trades. **On Mondays four algos overlap** (condor, strangle scalp, the weekend condor's buy-back
+until 09:50, directional scalp), one more than Kite allows: start the directional scalp once the
+weekend condor's window has closed (~09:50). It warms its chart up from Kite's 1-minute candles,
+so it only misses the 09:45-09:50 entries. Instead of typing `algo run`, you can press
 **Start** for a strategy on the dashboard (Overview, or the strategy's page): it opens the same
 command in its own window, which keeps running if the dashboard is closed. **Stop** squares off
 and stops it, like `algo kill`. The dashboard's **Log in** button opens `algo login`. Start is
@@ -117,6 +122,7 @@ src/trading_core/             shared platform (never imports from algos)
 src/algos/iron_condor/        the iron condor: config.yaml, filters, strike selector, blow-out exit
 src/algos/strangle_scalp/     the scalp: config.yaml, pair selector (premium / delta), entry signal
 src/algos/weekend_condor/     positional condor: Friday entry, carried over the weekend, Monday exit
+src/algos/directional_scalp/  CE/PE buying: bias score (breadth, premium skew, VWAP), Renko trigger, lot A/B exits
 src/algos/_template/          copy this to start a new algo
 tests/                        unit tests + full-day replays of synthetic data
 data/, logs/                  runtime output (git-ignored; the DB holds the daily access token)

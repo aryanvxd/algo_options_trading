@@ -62,7 +62,7 @@ DATASETS: dict[str, Dataset] = {d.name: d for d in [
         ("ts", "expiry", "strike", "opt_type")),
     Dataset("index_ticks", "symbol", _schema(
         ("ts", TS), ("trade_date", DATE), ("instrument_token", I64), ("symbol", STR), ("ltp", F64),
-        ("source", STR)), ("ts",)),
+        ("volume", I64), ("source", STR)), ("ts",)),       # volume: futures and stocks (null for an index)
     Dataset("instruments", "scope", _schema(
         ("as_of_date", DATE), ("instrument_token", I64), ("exchange_token", I64), ("tradingsymbol", STR),
         ("name", STR), ("exchange", STR), ("segment", STR), ("instrument_type", STR), ("strike", F64),
