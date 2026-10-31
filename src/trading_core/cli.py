@@ -14,9 +14,13 @@
   algo data status                     what is in the Parquet market-data store
   algo data index --from 2021-01-01    NIFTY 50 + India VIX 1-min history from Kite
   algo data constituents --from ...    NIFTY 50 constituents daily bars from Kite (breadth filter)
+  algo data constituents-1m --from ... NIFTY 50 constituents 1-min bars from Kite (backtest breadth)
+  algo data futures --from 2025-01-01  NIFTY continuous near-month future, 1-min with volume (backtest VWAP)
   algo data bhavcopy --from 2021-01-01 NSE end-of-day option chains (free) with IV/greeks
   algo data export-recorder            move recorded live ticks to Parquet (runs after each session)
   algo data query "select ..."         run SQL over the store with DuckDB
+  algo backtest --algo directional_scalp --from 2025-01-01 [--to ...] [--set key=value ...] [--name ...]
+                                       run an algo over minute history (results in data/backtests/<name>)
 """
 
 from __future__ import annotations
@@ -119,6 +123,38 @@ def cmd_kill(args: argparse.Namespace, platform: PlatformConfig) -> int:
     return 0
 
 
+def parse_sets(items: list[str] | None) -> dict:
+    """``--set bias.threshold=0.6`` -> {"bias": {"threshold": 0.6}} (values parsed as YAML)."""
+    import yaml
+
+    out: dict = {}
+    for item in items or []:
+        key, sep, raw = item.partition("=")
+        if not sep or not key:
+            raise ValueError(f"--set expects key=value, got '{item}'")
+        node = out
+        *parents, leaf = key.strip().split(".")
+        for p in parents:
+            node = node.setdefault(p, {})
+        node[leaf] = yaml.safe_load(raw)
+    return out
+
+
+def cmd_backtest(args: argparse.Namespace, platform: PlatformConfig) -> int:
+    import json
+
+    from trading_core.backtest.engine import run_backtest
+    from trading_core.backtest.summary import print_summary
+
+    end = date.fromisoformat(args.end) if args.end else date.today()
+    folder = run_backtest(platform, args.algo, date.fromisoformat(args.start), end, overrides=parse_sets(args.set),
+                          name=args.name, lot_size=args.lot_size)
+    print_summary(json.loads((folder / "summary.json").read_text(encoding="utf-8")))
+    print()
+    print(f"Results: {folder}")
+    return 0
+
+
 def cmd_report(args: argparse.Namespace, platform: PlatformConfig) -> int:
     from trading_core.db.repo import Journal
 
@@ -207,7 +243,7 @@ def cmd_data(args: argparse.Namespace, platform: PlatformConfig) -> int:
         print(nse.download(start, end, force=args.force))
         return 0
 
-    if args.action in ("index", "constituents"):
+    if args.action in ("index", "constituents", "constituents-1m", "futures"):
         from trading_core.config import load_universe
         from trading_core.kite.client import KiteClient
         from trading_core.marketdata.sources.kite_index import KiteHistory
@@ -219,6 +255,12 @@ def cmd_data(args: argparse.Namespace, platform: PlatformConfig) -> int:
         if args.action == "index":
             for sym in ([args.symbol] if args.symbol else md.index_symbols):
                 print(sym, kh.index_1m(sym, start, end, force=args.force))
+        elif args.action == "futures":
+            for und in md.underlyings:
+                print(f"{und} FUT", kh.futures_1m(und, start, end, force=args.force))
+        elif args.action == "constituents-1m":
+            symbols = [k.split(":", 1)[1] for k in load_universe(platform, args.universe)]
+            print(kh.equity_1m(symbols, start, end, force=args.force))
         else:
             symbols = [k.split(":", 1)[1] for k in load_universe(platform, args.universe)]
             print(kh.equity_daily(args.universe, symbols, start, end))
@@ -273,6 +315,15 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--force-new", action="store_true", help="start a new run even if today's already finished")
     r.set_defaults(fn=cmd_run)
 
+    b = sub.add_parser("backtest", help="run an algo over minute history (data/backtests/<name>)")
+    b.add_argument("--algo", required=True)
+    b.add_argument("--from", dest="start", required=True, metavar="YYYY-MM-DD")
+    b.add_argument("--to", dest="end", metavar="YYYY-MM-DD", help="default: today")
+    b.add_argument("--set", action="append", metavar="KEY=VALUE", help="override a config value (repeatable)")
+    b.add_argument("--name", help="folder name (default: algo + dates + time)")
+    b.add_argument("--lot-size", type=int, default=65, help="lot size used on every day (default 65)")
+    b.set_defaults(fn=cmd_backtest)
+
     k = sub.add_parser("kill", help="send a control command to a running algo")
     k.add_argument("--algo", required=True)
     k.add_argument("--command", default="KILL", choices=["KILL", "PAUSE", "RESUME", "kill", "pause", "resume"])
@@ -293,6 +344,8 @@ def build_parser() -> argparse.ArgumentParser:
     dsub.add_parser("status", help="coverage of the store")
     for name, hlp in (("index", "NIFTY 50 / India VIX 1-min from Kite"),
                       ("constituents", "index constituents daily bars from Kite"),
+                      ("constituents-1m", "index constituents 1-min bars from Kite (backtest breadth)"),
+                      ("futures", "NIFTY continuous future 1-min with volume from Kite (backtest VWAP)"),
                       ("bhavcopy", "NSE end-of-day option chains")):
         a = dsub.add_parser(name, help=hlp)
         a.add_argument("--from", dest="start", required=True, metavar="YYYY-MM-DD")
@@ -300,7 +353,7 @@ def build_parser() -> argparse.ArgumentParser:
         a.add_argument("--force", action="store_true", help="re-download days already stored")
         if name == "index":
             a.add_argument("--symbol", help='one index, e.g. "NIFTY 50" (default: all in config)')
-        if name == "constituents":
+        if name in ("constituents", "constituents-1m"):
             a.add_argument("--universe", default="nifty50")
     cal = dsub.add_parser("calendar", help="market calendar: economic events, results, India releases")
     cal.add_argument("--force", action="store_true", help="refetch sources already fetched today")

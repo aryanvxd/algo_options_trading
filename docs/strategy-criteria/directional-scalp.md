@@ -1,8 +1,12 @@
 # NIFTY directional buying scalp (Renko)
 
-- **Status:** v0.1 implemented in `src/algos/directional_scalp/` (config version 0.1.0, 30 Oct 2026),
-  with the recommendations in section 13. Numbers marked *(proposed)* are starting points, to be
-  tuned from the backtest (section 10, **not built yet**) and the paper days' logs.
+- **Status:** v0.2 in `src/algos/directional_scalp/` (config version 0.2.0, 31 Oct 2026).
+  - v0.1 (30 Oct) followed the recommendations in section 13.
+  - v0.2 takes the best settings from the two-year backtest (section 10a): **15-pt bricks, a 14-pt
+    hard stop, a 10-minute time stop, and the 2 lots as one order** (no lot A / lot B split).
+  - The text below still describes v0.1's numbers where it says so. Section 10a and `config.yaml`
+    are the current values.
+  - Numbers marked *(proposed)* are starting points, to be tuned from the paper days' logs.
 - **Mode:** paper, **2 lots**, every trading day, up to 5 trades between 09:45 and 11:00. First paper
   day: Mon 2 Nov 2026 (on Mondays, start it at ~09:50: see section 3).
 - **Replaces:** the "CE/PE premium-skew directional buy" idea note
@@ -183,11 +187,11 @@ P&L is marked at bid.
 |---|---|---|---|
 | 1 | Kill switch | `algo kill`, or 5 errors in a row | — |
 | 2 | Stale feed | no tick for **5 s** | — |
-| 3 | **Hard premium stop** | the option falls **8 pts** below the entry price, checked on every tick (catches a spike or an IV drop before a brick closes) | **−₹1,040** |
+| 3 | **Hard premium stop** | the option falls **8 pts** (v0.2: **14**) below the entry price, checked on every tick (catches a spike or an IV drop before a brick closes) | **−₹1,040** (v0.2: −₹1,820) |
 | 4 | **Renko reversal** | a brick forms against the trade (2 bricks back from the last brick, ≈ 20 NIFTY pts) | about −₹1,300 at the start, then it trails |
-| 5 | **Target, lot A** | option up **+12 pts** → sell lot A. Lot B's stop moves to entry + charges | lot A +₹780 |
-| 6 | **Trailing, lot B** | the Renko reversal (4) trails one brick per new brick in favour. Lot B also exits at **+30 pts** if reached (about a 60-pt NIFTY move) | lot B up to +₹1,950 |
-| 7 | **Time stop** | no new brick in favour for **5 min** (theta wins when the move stalls) | — |
+| 5 | **Target, lot A** (v0.1 only, `split_lots`) | option up **+12 pts** → sell lot A. Lot B's stop moves to entry + charges | lot A +₹780 |
+| 6 | **Trailing, lot B** | the Renko reversal (4) trails one brick per new brick in favour. Lot B also exits at **+30 pts** if reached (about a 60-pt NIFTY move). v0.2 has no split: both lots trail and take +30 together | lot B up to +₹1,950 (v0.2: up to +₹3,900) |
+| 7 | **Time stop** | no new brick in favour for **5 min** (v0.2: **10 min**). Theta wins when the move stalls | — |
 | 8 | Bias flip | the score crosses **0.3 the other way** (e.g. below −0.3 while in a CE) | — |
 | 9 | Time exit | **11:30** | — |
 
@@ -270,6 +274,58 @@ uses 4 orders too, and the condor uses 8.
    have been taken without B2", so after 4 weeks we know whether the skew helps or hurts.
 4. Live only after 18–24 paper days (common rule 4), using only the DTEs that paid.
 
+## 10a. Backtest results, 31 Oct 2026
+
+Two years, 1 Nov 2024 to 30 Oct 2026: 492 trading days, 2 lots, modelled option prices. B2 (skew)
+was off and B3 used the stocks' VWAPs (see [backtest.md](../design/backtest.md)). Folders are in
+`data/backtests/`.
+
+| Run | Bricks | Hard stop | Time stop | Lots as | Trades | Win % | Gross | Charges | **Net** | PF | Max DD | Year 1 | Year 2 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `ds_v010_2y` (config v0.1) | 10 | 8 | 5 min | A + B | 800 | 36 | −₹43.8k | ₹1.03 L | **−₹1.47 L** | 0.71 | −₹1.73 L | −₹52k | −₹94k |
+| `ds_stop14` | 10 | 14 | 5 min | A + B | 801 | 38 | −₹17.7k | ₹1.03 L | −₹1.21 L | 0.76 | −₹1.50 L | −₹46k | −₹75k |
+| `ds_brick15` | 15 | 8 | 10 min | A + B | 526 | 40 | +₹11.4k | ₹68k | −₹56.5k | 0.86 | −₹84k | −₹14k | −₹42k |
+| `ds_brick15_stop14` | 15 | 14 | 10 min | A + B | 508 | 46 | +₹45.4k | ₹66k | −₹20.3k | 0.95 | −₹66k | +₹11k | −₹32k |
+| **`ds_b15s14_nosplit`** | 15 | 14 | 10 min | **one order** | 508 | 41 | +₹76.9k | ₹42k | **+₹35.1k** | **1.09** | −₹45k | +₹41k | −₹6k |
+| `ds_brick20_stop14` | 20 | 14 | 15 min | A + B | 370 | 49 | +₹36.4k | ₹48k | −₹11.6k | 0.96 | −₹44k | +₹8k | −₹20k |
+| `ds_brick20_stop18` | 20 | 18 | 15 min | A + B | 364 | 51 | +₹48.1k | ₹47k | +₹0.9k | 1.00 | −₹49k | +₹27k | −₹26k |
+
+**What the v0.1 run showed** (800 trades):
+- **The 8-pt hard stop is the loss.** It sits about 16 NIFTY points away, inside the normal
+  pullback after a two-brick push.
+  - Trades closed within 5 minutes: 291, about 10% winners, −₹3.16 L.
+  - Trades that lasted 5+ minutes: +₹1.70 L.
+- **No entry filter separated winners from losers.** Entry time, VIX, premium, score strength and
+  distance from VWAP all made little difference. Most entries were already 4+ bricks from VWAP,
+  and B3 is at ±1 most of the time: the NIFTY–VWAP gap averages about 35 points against a 15-point
+  full scale.
+- **Charges, about ₹129 a trade with lot A and lot B as separate orders, are larger than the
+  pre-charge edge.**
+
+**What the variants show:**
+- **Bigger bricks and a wider stop:** fewer trades, and the same move has room to work. That
+  turns gross positive.
+- **Sending the 2 lots as one order** (no separate lot A booking):
+  - charges fall about 36%;
+  - gross *rises*, because booking lot A at +12 cut the winners short.
+
+  This is the only clearly positive run.
+
+**Decided 31 Oct 2026: paper trade the best run's settings as v0.2** (`ds_b15s14_nosplit`).
+- Paper costs nothing, and every variant showed v0.1 was the weakest version.
+- The paper days are the out-of-sample test: compare them with the backtest's ~41% win rate and
+  profit factor 1.09.
+
+**How much to trust it: not much yet.**
+- The best run is profit factor 1.09 on modelled option prices.
+- Year 2 is slightly negative, and only 11 of 24 months were positive.
+- It came from trying 7 settings on the same two years, so some of the gain is fitted to this period.
+- Calls did better than puts in most runs, and 3–4 DTE better than expiry and 1 DTE. These are
+  hints to check on paper and on fresh data, not rules to adopt.
+
+B3 check: on the 45 days that have futures minute data, the stocks-based VWAP gap tracked the
+futures VWAP gap with correlation 0.97 and slope 1.01 (3,420 minutes, 09:45–11:00).
+
 ## 11. Platform pieces (built 30 Oct 2026 unless marked)
 
 | Piece | Status |
@@ -284,7 +340,7 @@ uses 4 orders too, and the condor uses 8.
 | **Partial exit** | done: `BaseAlgo.manage_open()` and `close_legs()`. Lot A and lot B are two legs on the same option, and the trade's cost per unit still reads as one option's price |
 | Exits | done: hard premium stop, Renko reversal, lot B target, breakeven after lot A, time stop, bias flip (`algos/directional_scalp/exits.py`) |
 | Strategy page | done: a Today panel with the score, its three parts, breadth, VWAP and the Renko bricks, plus the usual tabs. The Performance tab shows the ~49% break-even line |
-| Backtest on Kite 1-minute history | **not built**: needs a minute downloader for the 50 stocks and an option-price model (section 10) |
+| Backtest on Kite 1-minute history | done 31 Oct 2026: `algo backtest --algo directional_scalp` ([backtest.md](../design/backtest.md)). It runs this algo's own code on rebuilt days, with the skew part off and breadth/VWAP re-weighted 0.57/0.43 (`BACKTEST_OVERRIDES` in algo.py). Data: `algo data index`, `futures`, `constituents-1m`, `bhavcopy` |
 | Replay tests | synthetic days (rising, falling with rich puts, flat, reversal, no previous closes): `tests/algos/directional_scalp/` |
 
 ## 12. More things worth adding (my suggestions)

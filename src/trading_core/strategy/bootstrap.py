@@ -75,8 +75,9 @@ def single_instance(path: Path) -> Iterator[None]:
 def run_algo(platform: PlatformConfig, db: Database, algo_id: str, *, mode: str | None = None,
              replay_date: date | None = None, overrides: dict[str, Any] | None = None,
              force_new: bool = False, clock: Clock | None = None,
-             calendar: MarketCalendar | None = None) -> int:
-    """Run ``algo_id`` for one day. Returns the run_id."""
+             calendar: MarketCalendar | None = None, feed: Any = None) -> int:
+    """Run ``algo_id`` for one day. Returns the run_id. A replay may be given its ``feed`` (a
+    backtest's rebuilt day); otherwise it reads the ticks recorded on ``replay_date``."""
     algo_cls, cfg = registry.load(algo_id, overrides)
     mode = mode or cfg.mode
     if mode != "paper":
@@ -84,11 +85,12 @@ def run_algo(platform: PlatformConfig, db: Database, algo_id: str, *, mode: str 
     # Replays never touch a live run, so any number of them may run alongside one.
     lock = nullcontext() if replay_date else single_instance(platform.data_dir / "locks" / f"{algo_id}.lock")
     with lock:
-        return _run(platform, db, algo_id, algo_cls, cfg, mode, replay_date, force_new, clock, calendar)
+        return _run(platform, db, algo_id, algo_cls, cfg, mode, replay_date, force_new, clock, calendar, feed)
 
 
 def _run(platform: PlatformConfig, db: Database, algo_id: str, algo_cls: type, cfg: Any, mode: str,
-         replay_date: date | None, force_new: bool, clock: Clock | None, calendar: MarketCalendar | None) -> int:
+         replay_date: date | None, force_new: bool, clock: Clock | None, calendar: MarketCalendar | None,
+         feed: Any = None) -> int:
     source = "replay" if replay_date else "live"
     clock = clock or (SimClock(ist(replay_date, REPLAY_START)) if replay_date else LiveClock())
     trade_date = replay_date or clock.today()
@@ -104,7 +106,7 @@ def _run(platform: PlatformConfig, db: Database, algo_id: str, algo_cls: type, c
         from trading_core.feed.replay_feed import ReplayFeed
         from trading_core.marketdata.store import MarketStore
 
-        feed = ReplayFeed(db, trade_date, clock, store=MarketStore(platform.marketdata.dir))
+        feed = feed or ReplayFeed(db, trade_date, clock, store=MarketStore(platform.marketdata.dir))
         premarket_source = StoredPremarketSource(journal, trade_date)
     else:
         from trading_core.feed.live_feed import LiveFeed

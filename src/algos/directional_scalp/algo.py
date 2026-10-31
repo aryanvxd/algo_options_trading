@@ -4,9 +4,10 @@ Day: every trading day (``trade_weekdays``) -> subscribe NIFTY, India VIX, NIFTY
 NIFTY stocks and strikes around spot; warm up the Renko chart (NIFTY spot, 1-minute closes) and the
 futures VWAP from Kite's 1-minute candles since 09:15 -> every 5 s score the bias from weighted
 breadth, CE/PE premium skew and futures vs VWAP -> from 09:45, when the score has favoured one side
-for 2 minutes and Renko prints two bricks in a row that way, buy the ATM CE or PE (2 lots: lot A
-books +12 pts, lot B trails) -> exits every second (kill, stale feed, hard premium stop, day loss,
-Renko reversal, lot B target, breakeven after lot A, time stop, bias flip, 11:30) -> after a
+for 2 minutes and Renko prints two bricks in a row that way, buy the ATM CE or PE (2 lots as one
+order; with ``split_lots`` lot A books +12 pts and lot B trails) -> exits every second (kill, stale
+feed, hard premium stop, day loss, Renko reversal, target, breakeven after lot A, time stop, bias
+flip, 11:30) -> after a
 2-minute cool-down look for the next: at most 5 trades, entries until 11:00.
 """
 
@@ -31,6 +32,11 @@ from trading_core.strategy.position import Leg, Mark, Position
 
 SESSION_OPEN = time(9, 15)
 DIRECTION = {CE: UP, PE: DOWN}
+# Backtests: modelled option prices carry the previous day's smile, not the day's real CE/PE
+# imbalance, so the premium-skew part is off and the other two keep their 4:3 ratio
+# (docs/design/backtest.md, section 4).
+# B3 uses the stocks' VWAPs there: Kite keeps no minute history for expired futures.
+BACKTEST_OVERRIDES = {"bias": {"w_skew": 0.0, "w_breadth": 0.57, "w_vwap": 0.43, "vwap_source": "stocks"}}
 
 
 class DirectionalScalpAlgo(BaseAlgo):
@@ -54,6 +60,7 @@ class DirectionalScalpAlgo(BaseAlgo):
         self.bars = MinuteBars()
         self.renko = Renko(cfg.trigger.brick_pts)
         self.vwap = Vwap()
+        self.stock_vwap: dict[int, Vwap] = {}
         self.warmed_up = False
         self.tracker = BiasTracker(cfg.bias)
         self.last_breadth: BreadthReading | None = None
@@ -205,9 +212,11 @@ class DirectionalScalpAlgo(BaseAlgo):
             bias_held_s=round(self.tracker.held_s(now)), bias_ready=self.tracker.side(now),
             threshold=self.cfg.bias.threshold, hold_s=self.cfg.bias.hold_s,
             breadth=self.last_breadth.as_dict() if self.last_breadth else None,
-            vwap=self.vwap.value, fut=self.fut_price(), brick_pts=self.renko.size,
+            vwap=self.vwap_level(), vwap_source=self.cfg.bias.vwap_source, fut=self.fut_price(),
+            brick_pts=self.renko.size,
             bricks=self.renko.recent(24), reversal_level=self.renko.reversal_level,
             hard_stop_pts=e.hard_stop_pts, lot_a_target_pts=e.lot_a_target_pts, lot_b_target_pts=e.lot_b_target_pts,
+            split_lots=self.cfg.split_lots and self.cfg.lots >= 2,
             hard_stop_rupees=-self.rupees(e.hard_stop_pts),
         )
         pos = self.position
@@ -346,6 +355,11 @@ class DirectionalScalpAlgo(BaseAlgo):
         fut = self.ctx.feed.latest(self.fut.instrument_token) if self.fut else None
         if fut is not None:
             self.vwap.add_tick(fut.ltp, fut.volume)
+        if self.cfg.bias.vwap_source == "stocks" and self.breadth:
+            for mbr in self.breadth.members:
+                t = self.ctx.feed.latest(mbr.token)
+                if t is not None:
+                    self.stock_vwap.setdefault(mbr.token, Vwap()).add_tick(t.ltp, t.volume)
         for bar in self.bars.add(now, spot):
             for b in self.renko.add(bar.ts + timedelta(minutes=1), bar.close):
                 self.log.info("Renko %s brick %.0f -> %.0f (1-min close %.2f at %s)",
@@ -362,17 +376,41 @@ class DirectionalScalpAlgo(BaseAlgo):
         if spot is not None:
             bal = premium_balance(spot, b.skew_distance_pts, self.chain, quote)
             skew = round(bal.pe / bal.ce, 3) if bal else None
-        fut, vwap = self.fut_price(), self.vwap.value
-        reading = score(b, now, self.last_breadth.weighted if self.last_breadth else None, skew,
-                        round(fut - vwap, 2) if fut is not None and vwap is not None else None)
+        reading = score(b, now, self.last_breadth.weighted if self.last_breadth else None, skew, self.vwap_gap())
         self.tracker.update(reading)
         if self._next_bias_log is None or now >= self._next_bias_log:
             self._next_bias_log = now + timedelta(seconds=b.log_every_s)
             self._log_bias(reading, now)
 
+    def vwap_gap(self) -> float | None:
+        """B3's input: NIFTY above (+) or below (−) its VWAP, in index points."""
+        if self.cfg.bias.vwap_source == "futures":
+            fut, vwap = self.fut_price(), self.vwap.value
+            return round(fut - vwap, 2) if fut is not None and vwap is not None else None
+        spot = self.spot()
+        if spot is None or not self.breadth:
+            return None
+        dev = w_sum = 0.0
+        for mbr in self.breadth.members:
+            v = self.stock_vwap.get(mbr.token)
+            t = self.ctx.feed.latest(mbr.token)
+            if v is not None and v.value and t is not None and t.ltp:
+                dev += mbr.weight * (t.ltp - v.value) / v.value
+                w_sum += mbr.weight
+        if w_sum < self.cfg.bias.breadth_min_coverage:
+            return None
+        return round(spot * dev / w_sum, 2)
+
+    def vwap_level(self) -> float | None:
+        """The VWAP level in NIFTY terms (spot minus the gap), for the extension check and the page."""
+        if self.cfg.bias.vwap_source == "futures":
+            return self.vwap.value
+        gap, spot = self.vwap_gap(), self.spot()
+        return round(spot - gap, 2) if gap is not None and spot is not None else None
+
     def _log_bias(self, r: BiasReading, now: datetime, name: str = "bias") -> None:
         self.check(name, True, r.score, self.cfg.bias.threshold, log_only=True, side=self.tracker.raw_side(r),
-                   held_s=round(self.tracker.held_s(now)), spot=self.spot(), vwap=self.vwap.value,
+                   held_s=round(self.tracker.held_s(now)), spot=self.spot(), vwap=self.vwap_level(),
                    breadth=self.last_breadth.as_dict() if self.last_breadth else None, **r.as_dict())
 
     # ------------------------------------------------------------ entry
@@ -404,7 +442,7 @@ class DirectionalScalpAlgo(BaseAlgo):
         if run < t.bricks:
             return self._wait(f"bias {side}: {run} of {t.bricks} bricks that way")
 
-        spot, vwap = self.spot(), self.vwap.value
+        spot, vwap = self.spot(), self.vwap_level()
         extension = round(abs(spot - vwap) / self.renko.size, 2) if spot is not None and vwap else None
         detail = dict(side=side, bricks=run, spot=spot, vwap=vwap, extension_bricks=extension,
                       breadth=self.last_breadth.as_dict() if self.last_breadth else None, **r.as_dict())

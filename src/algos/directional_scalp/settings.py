@@ -21,8 +21,11 @@ class BiasConfig(BaseModel):
     skew_distance_pts: float = 300.0
     skew_bull_ratio: float = 0.95
     skew_bear_ratio: float = 1.45
-    # B3 NIFTY futures minus its VWAP since 09:15 -> ±1 at ±vwap_full_pts
+    # B3 NIFTY minus its VWAP since 09:15 -> ±1 at ±vwap_full_pts. ``futures``: the near-month
+    # future's VWAP (live). ``stocks``: the 50 stocks' distance from their own VWAPs, index-weighted,
+    # in index points (backtests: Kite has no minute history for expired futures).
     vwap_full_pts: float = 15.0
+    vwap_source: Literal["futures", "stocks"] = "futures"
     w_breadth: float = 0.4
     w_skew: float = 0.3
     w_vwap: float = 0.3

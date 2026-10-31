@@ -89,9 +89,25 @@ Design and source comparison: `docs/design/historical-data-and-backtests.md`.
 algo data bhavcopy --from 2021-01-01             # NSE end-of-day option chains, free; IV/greeks computed
 algo data index --from 2021-01-01                # NIFTY 50 + India VIX 1-min from Kite (needs algo login)
 algo data constituents --from 2021-01-01         # NIFTY 50 stocks, daily
+algo data constituents-1m --from 2024-11-01      # NIFTY 50 stocks, 1-min (backtest breadth; needs algo login)
+algo data futures --from 2024-11-01              # NIFTY continuous future, 1-min with volume (backtest VWAP)
 algo data status                                 # what is stored, first/last day, problems
 algo data query "select * from options_eod where trade_date = '2026-10-22' limit 5"
 ```
+
+### Backtests
+
+`algo backtest` runs an algo day by day over the minute history, through the same runner, exit
+rules and paper broker as a live run (option prices are modelled: see
+`docs/design/backtest.md`). Each backtest gets its own folder with its own database:
+
+```bash
+algo backtest --algo directional_scalp --from 2024-11-01 --to 2026-10-30
+algo backtest --algo directional_scalp --from 2024-11-01 --set trigger.brick_pts=12 --name brick12
+```
+
+It prints the summary (win rate, profit factor, drawdown, results by DTE / side / exit) and keeps
+it in `data/backtests/<name>/summary.json`.
 
 `algo data calendar` fetches the market calendar: Forex Factory's weekly global events, NSE's
 results calendar, and the India list in `config/calendar/` (RBI, CPI, GDP, IIP, WPI, Budget: keep
@@ -122,7 +138,7 @@ src/trading_core/             shared platform (never imports from algos)
 src/algos/iron_condor/        the iron condor: config.yaml, filters, strike selector, blow-out exit
 src/algos/strangle_scalp/     the scalp: config.yaml, pair selector (premium / delta), entry signal
 src/algos/weekend_condor/     positional condor: Friday entry, carried over the weekend, Monday exit
-src/algos/directional_scalp/  CE/PE buying: bias score (breadth, premium skew, VWAP), Renko trigger, lot A/B exits
+src/algos/directional_scalp/  CE/PE buying: bias score (breadth, premium skew, VWAP), Renko trigger and exits
 src/algos/_template/          copy this to start a new algo
 tests/                        unit tests + full-day replays of synthetic data
 data/, logs/                  runtime output (git-ignored; the DB holds the daily access token)

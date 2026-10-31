@@ -78,6 +78,9 @@ class Runner:
         to_due = (due - now).total_seconds()
         if self.algo.active:
             return min(self.rt.loop_interval_s, to_due)
+        if self.feed_started and not self.algo.finished:
+            # Watching before entry (charts, bias): a replay steps through it like a live run.
+            return min(self.rt.loop_interval_s, to_due)
         if self.ctx.clock.simulated:
             return to_due                       # nothing to do until the next step: jump
         if self.feed_started:

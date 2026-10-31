@@ -9,7 +9,7 @@ When a rule changes, update the file here first, then the config/code.
 | NIFTY short iron condor | [iron-condor.md](iron-condor.md) | option selling, non-directional, every trading day | v2 implemented, paper |
 | NIFTY long strangle scalp | [long-strangle-scalp.md](long-strangle-scalp.md) | option buying, long volatility, Mon/Tue, up to 3 trades 09:45–10:30 | v0.2 implemented, paper |
 | NIFTY weekend short iron condor | [weekend-iron-condor.md](weekend-iron-condor.md) | option selling, positional: Friday entry → Monday exit | v0.1 implemented, paper from 30 Oct 2026 |
-| NIFTY directional buying scalp (Renko) | [directional-scalp.md](directional-scalp.md) | option buying, directional: breadth + premium skew + VWAP bias, Renko trigger, 2 lots, up to 5 trades 09:45–11:00 | v0.1 implemented, paper from 2 Nov 2026 |
+| NIFTY directional buying scalp (Renko) | [directional-scalp.md](directional-scalp.md) | option buying, directional: breadth + premium skew + VWAP bias, Renko trigger, 2 lots, up to 5 trades 09:45–11:00 | v0.2 (backtest-tuned 31 Oct), paper from 2 Nov 2026 |
 | CE/PE premium-skew directional buy | [premium-skew-option-buying.md](premium-skew-option-buying.md) | option buying, directional | folded into the directional scalp (its B2) |
 
 ## Daily constraint that applies to every strategy

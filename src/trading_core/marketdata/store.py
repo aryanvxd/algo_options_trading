@@ -45,6 +45,9 @@ DATASETS: dict[str, Dataset] = {d.name: d for d in [
     Dataset("index_1m", "symbol", _schema(
         ("ts", TS), ("trade_date", DATE), ("symbol", STR), ("open", F64), ("high", F64), ("low", F64),
         ("close", F64), ("volume", I64), ("source", STR)), ("ts",)),
+    Dataset("equity_1m", "symbol", _schema(               # NIFTY 50 stocks (backtest breadth)
+        ("ts", TS), ("trade_date", DATE), ("symbol", STR), ("open", F64), ("high", F64), ("low", F64),
+        ("close", F64), ("volume", I64), ("source", STR)), ("ts",)),
     Dataset("options_1m", "underlying", _schema(
         ("ts", TS), ("trade_date", DATE), ("underlying", STR), ("expiry", DATE), ("strike", F64),
         ("opt_type", STR), ("open", F64), ("high", F64), ("low", F64), ("close", F64), ("volume", I64),

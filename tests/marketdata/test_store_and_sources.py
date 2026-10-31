@@ -161,8 +161,8 @@ class FakeKite:
     def __init__(self):
         self.calls = []
 
-    def historical(self, token, start, end, interval, oi=False):
-        self.calls.append((token, start, end, interval))
+    def historical(self, token, start, end, interval, oi=False, continuous=False):
+        self.calls.append((token, start, end, interval) + (("continuous",) if continuous else ()))
         if interval == "minute":
             out = []
             for d in (date(2026, 10, 19), date(2026, 10, 21)):        # 20th (Tuesday) is a holiday
@@ -173,6 +173,11 @@ class FakeKite:
         return [dict(date=datetime(2026, 1, 2), open=1, high=1, low=1, close=5, volume=10)]
 
     def instruments(self, exchange):
+        if exchange == "NFO":
+            return [dict(tradingsymbol="NIFTY26NOVFUT", name="NIFTY", segment="NFO-FUT", instrument_token=111,
+                         expiry=date(2099, 11, 24)),
+                    dict(tradingsymbol="NIFTY26DECFUT", name="NIFTY", segment="NFO-FUT", instrument_token=222,
+                         expiry=date(2099, 12, 29))]
         return [dict(tradingsymbol="INFY", segment="NSE", instrument_token=408065)]
 
 
@@ -192,3 +197,17 @@ def test_kite_constituents_daily(db, store):
     assert kh.equity_daily("nifty50", ["INFY", "GONE"], date(2026, 1, 1), date(2026, 1, 31)) == \
         dict(years=1, rows=1, missing=1)
     assert store.read("equity_daily", "nifty50", "kite", year=2026).num_rows == 1
+
+
+def test_kite_futures_and_stock_minutes_land_in_their_datasets(db, store):
+    kite = FakeKite()
+    hist = KiteHistory(kite, store, Manifest(db), progress=lambda m: None)
+    fut = hist.futures_1m("NIFTY", date(2026, 10, 19), date(2026, 10, 21))
+    assert fut["days"] == 2 and kite.calls[-1][0] == 111 and kite.calls[-1][-1] != "continuous"   # near month
+    assert store.days("index_1m", "NIFTY FUT") == [date(2026, 10, 19), date(2026, 10, 20), date(2026, 10, 21)]
+    eq = hist.equity_1m(["INFY", "GONE"], date(2026, 10, 19), date(2026, 10, 21))
+    assert eq["missing"] == 1 and eq["days"] == 2
+    assert store.read("equity_1m", "INFY", "kite", day=date(2026, 10, 21))["close"].to_pylist() == [10.0, 11.0, 12.0]
+    calls = len(kite.calls)
+    hist.equity_1m(["INFY"], date(2026, 10, 19), date(2026, 10, 21))                 # resumes: nothing fetched
+    assert len(kite.calls) == calls

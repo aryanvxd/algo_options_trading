@@ -4,13 +4,13 @@
 
 algo_id: directional_scalp
 name: NIFTY Directional Scalp
-version: "0.1.0"
+version: "0.2.0"              # 31 Oct 2026: settings from the two-year backtest (spec section 10a)
 description: Buy the ATM CE or PE when breadth, premium skew and VWAP lean one way and Renko prints two bricks; up to 5 trades 09:45-11:00.
 mode: paper            # live is disabled in v1
-lots: 2                # lot A books the first target, lot B trails
+lots: 2
 capital: 35000         # bucket: 2 lots of the dearest ATM (~₹180 on 3-4 DTE ≈ ₹23,400) plus a buffer
 trade_weekdays: [Mon, Tue, Wed, Thu, Fri]
-split_lots: true
+split_lots: false      # both lots as one order: lot A's +12 booking cut winners short, and 2 orders cost more
 
 max_trades: 5
 reentry_cooldown_s: 120        # D2: 2 minutes between an exit and the next entry
@@ -39,7 +39,7 @@ bias:
   flip_exit: 0.3               # exit an open trade when the score goes 0.3 the other way
 
 trigger:
-  brick_pts: 10                # Renko on NIFTY spot, from 1-minute closes
+  brick_pts: 15                # Renko on NIFTY spot, from 1-minute closes (was 10: entries sat inside the pullback)
   bricks: 2                    # T1: two bricks in a row in the bias direction
   max_vwap_extension_bricks: 2 # T2: logged; enforced only with enforce_extension
   enforce_extension: false
@@ -62,11 +62,11 @@ limits:
   max_direction_changes: 2     # D6
 
 exits:
-  hard_stop_pts: 8             # option 8 pts below entry (8 × 130 = ₹1,040 at 2 lots)
-  lot_a_target_pts: 12         # book lot A at +12 ...
+  hard_stop_pts: 14            # option 14 pts below entry (14 × 130 = ₹1,820 at 2 lots; was 8)
+  lot_a_target_pts: 12         # with split_lots only: book lot A at +12 ...
   breakeven_buffer_pts: 0.5    # ... then lot B exits if it falls back to entry + 0.5
-  lot_b_target_pts: 30         # lot B's cap
-  time_stop_s: 300             # no new brick in the trade's favour for 5 minutes
+  lot_b_target_pts: 30         # target: +30 pts (lot B's cap when split)
+  time_stop_s: 600             # no new brick in the trade's favour for 10 minutes (was 5)
   stale_feed_seconds: 5
 
 schedule:

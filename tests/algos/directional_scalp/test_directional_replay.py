@@ -24,6 +24,10 @@ CAL = MarketCalendar([])
 FUT_TOKEN = 30_000_001
 # Synthetic ticks are 15 s apart: relax the feed and quote-age limits.
 LOOSE = {"exits": {"stale_feed_seconds": 60}, "option": {"max_quote_age_s": 20}}
+# The scenarios below are timed for v0.1's settings (10-pt bricks, 8-pt stop, lot A/B split), which
+# also keeps the split path tested; v0.2's defaults get their own test.
+V01 = {"split_lots": True, "trigger": {"brick_pts": 10},
+       "exits": {"stale_feed_seconds": 60, "hard_stop_pts": 8, "time_stop_s": 300}, "option": {"max_quote_age_s": 20}}
 
 
 def minute(frac: float) -> float:
@@ -60,8 +64,8 @@ def seed(db, platform, spot, stocks_pct, ce_skew=1.0, prev_closes=True):
     journal.add_ticks(run.run_id, ticks)
 
 
-def replay(platform, db, overrides=None):
-    return run_algo(platform, db, "directional_scalp", replay_date=DAY, overrides={**LOOSE, **(overrides or {})},
+def replay(platform, db, overrides=None, base=V01):
+    return run_algo(platform, db, "directional_scalp", replay_date=DAY, overrides={**base, **(overrides or {})},
                     calendar=CAL)
 
 
@@ -144,3 +148,12 @@ def test_no_previous_closes_means_no_breadth_and_no_trading(platform, db):
     with db.session() as s:
         run = s.get(m.AlgoRun, run_id)
     assert run.status == "SKIPPED" and "previous closes" in run.skip_reason and positions(db) == []
+
+
+def test_default_settings_buy_both_lots_as_one_order(platform, db):
+    seed(db, platform, trend(+1), lambda mins: 0.6)
+    replay(platform, db, base=LOOSE)                                  # config.yaml as it is (v0.2)
+    first = positions(db)[0]
+    assert first.params["side"] == "CE" and [(l.role, l.qty) for l in first.legs] == [("LONG_CE", 130)]
+    assert first.status == "CLOSED" and events(db, "PARTIAL_EXIT") == []
+    assert first.entry_time.time() >= time(10, 0)                     # two 15-pt bricks take longer

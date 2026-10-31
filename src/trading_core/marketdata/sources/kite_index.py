@@ -1,4 +1,5 @@
-"""Index (NIFTY 50, INDIA VIX) 1-minute history and constituent daily bars from Kite.
+"""1-minute history from Kite: indices (NIFTY 50, INDIA VIX), the continuous NIFTY future and the
+index's stocks; plus the stocks' daily bars.
 
 These are live instruments, so Kite's historical API serves them (free with Kite Connect).
 Minute requests are limited to 60 days each; daily to 2000 days.
@@ -38,6 +39,10 @@ def _chunks(start: date, end: date, days: int):
         cur = stop + timedelta(days=1)
 
 
+def _as_date(v: Any) -> date:
+    return v if isinstance(v, date) and not isinstance(v, datetime) else date.fromisoformat(str(v)[:10])
+
+
 def _weekdays(start: date, end: date) -> list[date]:
     return [start + timedelta(days=i) for i in range((end - start).days + 1)
             if (start + timedelta(days=i)).weekday() < 5]
@@ -68,23 +73,56 @@ class KiteHistory:
     def index_1m(self, symbol: str, start: date, end: date, force: bool = False) -> dict[str, int]:
         """Download 1-min bars for ``symbol``; one Parquet file per trading day. Weekdays with no
         data (holidays) are recorded as EMPTY so they are not requested again."""
-        token = self.token_for(symbol)
+        return self.minute("index_1m", symbol, self.token_for(symbol), start, end, force)
+
+    def future_token(self, underlying: str) -> int:
+        """The current near-month future."""
+        today = date.today()
+        futs = [r for r in self.client.instruments("NFO") if r.get("segment") == "NFO-FUT"
+                and r.get("name") == underlying and r.get("expiry") and _as_date(r["expiry"]) >= today]
+        if not futs:
+            raise KeyError(f"no live {underlying} future in Kite's NFO instruments")
+        return int(min(futs, key=lambda r: _as_date(r["expiry"]))["instrument_token"])
+
+    def futures_1m(self, underlying: str, start: date, end: date, force: bool = False) -> dict[str, int]:
+        """The current near-month future, 1-min with volume, stored as index_1m '<UNDERLYING> FUT'.
+        Kite serves minute candles only for live contracts (``continuous`` is daily-only), so this
+        reaches back to the contract's listing, about 3 months."""
+        return self.minute("index_1m", f"{underlying} FUT", self.future_token(underlying), start, end, force)
+
+    def equity_1m(self, symbols: list[str], start: date, end: date, force: bool = False) -> dict[str, int]:
+        """1-min bars of each stock (the backtest's breadth). Symbols Kite doesn't list are skipped."""
+        total = dict(days=0, rows=0, skipped=0, empty=0, missing=0)
+        for sym in symbols:
+            try:
+                token = self.token_for(sym, segment="NSE")
+            except KeyError:
+                total["missing"] += 1
+                log.warning("%s not found on Kite (renamed/delisted?)", sym)
+                continue
+            for k, v in self.minute("equity_1m", sym, token, start, end, force).items():
+                total[k] += v
+        return total
+
+    def minute(self, dataset: str, key: str, token: int, start: date, end: date, force: bool = False,
+               continuous: bool = False) -> dict[str, int]:
+        symbol = key
         stats = dict(days=0, rows=0, skipped=0, empty=0)
         for lo, hi in _chunks(start, end, MINUTE_CHUNK_DAYS):
             wanted = _weekdays(lo, hi)
-            if not force and all(self.manifest.have("index_1m", symbol, d, SOURCE) for d in wanted):
+            if not force and all(self.manifest.have(dataset, symbol, d, SOURCE) for d in wanted):
                 stats["skipped"] += len(wanted)
                 continue
             candles = self.client.historical(token, datetime.combine(lo, datetime.min.time()),
                                              datetime.combine(hi, datetime.max.time().replace(microsecond=0)),
-                                             "minute")
+                                             "minute", continuous=continuous)
             by_day: dict[date, list[dict[str, Any]]] = defaultdict(list)
             for c in candles:
                 ts = _naive_ist(c["date"])
                 by_day[ts.date()].append(c | {"ts": ts})
             for d in wanted:
                 rows = by_day.get(d, [])
-                if not force and self.manifest.have("index_1m", symbol, d, SOURCE):
+                if not force and self.manifest.have(dataset, symbol, d, SOURCE):
                     stats["skipped"] += 1
                     continue
                 table = pa.table({
@@ -92,8 +130,8 @@ class KiteHistory:
                     "open": [r["open"] for r in rows], "high": [r["high"] for r in rows],
                     "low": [r["low"] for r in rows], "close": [r["close"] for r in rows],
                     "volume": [r.get("volume") or 0 for r in rows], "source": [SOURCE] * len(rows)})
-                path, table = self.store.write_day("index_1m", symbol, d, SOURCE, table)
-                self.manifest.record("index_1m", symbol, d, SOURCE, path, table,
+                path, table = self.store.write_day(dataset, symbol, d, SOURCE, table)
+                self.manifest.record(dataset, symbol, d, SOURCE, path, table,
                                      note=None if rows else "no candles (holiday?)")
                 stats["days" if rows else "empty"] += 1
                 stats["rows"] += len(rows)
