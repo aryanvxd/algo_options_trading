@@ -6,6 +6,27 @@ history_days: 2920           # first download: about 8 years of daily candles
 min_traded_value_cr: 25      # S5: 20-day average traded value, ₹ crore (liquid stocks only)
 alerts_enabled: false        # nothing is ever sent to Kite while this is false
 
+zones:                       # spec section 4; ATR = simple 14-day average true range
+  lookback_days: 730         # pivots and touches from the last two years
+  min_history_days: 250      # fewer daily candles: no zones (recent listings)
+  pivot_daily: 5             # Z1: extreme of 5 days either side ...
+  pivot_weekly: 3            # ... or of 3 weeks either side; both count equally
+  group_gap_atr: 0.5         # Z2: a gap this wide between pivot prices starts a new zone
+  max_width_atr: 2.5         # ... and a zone wider than this is split at its widest gap
+  min_width_atr: 0.5
+  min_turns: 2               # a zone needs 2 pivots or 2 touches: a level price turned at more than once
+  retest_atr: 1.0            # Z3: a touch = a visit that leaves the side it came from; the next
+                             #     one from that side counts once price was 1 ATR away
+  departure_days: 5          # Z5: move away over the next 5 days, in ATRs
+  break_atr: 1.0             # Z9: 2 closes running more than 1 ATR beyond breaks the zone
+  break_days: 2
+  fresh_days: 60             # Z6: tests in the last 60 sessions are "recent"
+  stale_tests: 4             # ... 4 recent tests scores 0 for freshness
+  full_touches: 4            # Z3 full marks
+  full_departure_atr: 3.0    # Z5 full marks
+  confluence_pad_atr: 0.25   # Z8: 200-day average, round number, 52-week low/high this close
+  weights: {touches: 1, reversal: 1, departure: 1, freshness: 1, volume: 1, confluence: 1}
+
 # Sector and theme indices (spec section 2). ``name`` is Kite's tradingsymbol (NSE, INDICES);
 # ``csv`` is the index's constituent file on niftyindices.com/IndexConstituent/.
 # Not added (no constituent file found, 1 Nov 2026): NIFTY EV, NIFTY RAILWAYS PSU, NIFTY INTERNET,

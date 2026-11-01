@@ -24,6 +24,8 @@
   algo swing universe                  weekend S/R swing: refresh sector/theme index members from NSE
   algo swing data [--from ...]         weekend S/R swing: daily candles for those indices and stocks
   algo swing bars POWERGRID [--weekly] weekend S/R swing: print recent candles
+  algo swing zones POWERGRID [--asof ...] [--pivots]   weekend S/R swing: support/resistance zones
+  algo swing chart POWERGRID [--mark 249.60]           weekend S/R swing: HTML chart in data/reports/swing
 """
 
 from __future__ import annotations

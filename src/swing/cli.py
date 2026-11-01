@@ -22,6 +22,16 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     b.add_argument("symbol")
     b.add_argument("--weekly", action="store_true")
     b.add_argument("--last", type=int, default=10)
+    z = ssub.add_parser("zones", help="support/resistance zones of a stock or index")
+    z.add_argument("symbol")
+    z.add_argument("--asof", metavar="YYYY-MM-DD", help="use candles up to this day only")
+    z.add_argument("--pivots", action="store_true", help="also list each zone's pivots and touches")
+    c = ssub.add_parser("chart", help="HTML chart of candles and zones (data/reports/swing/<SYMBOL>.html)")
+    c.add_argument("symbol")
+    c.add_argument("--asof", metavar="YYYY-MM-DD", help="use candles up to this day only")
+    c.add_argument("--days", type=int, default=730, help="days of candles shown (default 730)")
+    c.add_argument("--mark", type=float, metavar="PRICE", help="draw a price line, e.g. your entry")
+    c.add_argument("--mark-label", default="entry")
     sw.set_defaults(fn=cmd_swing)
 
 
@@ -35,7 +45,40 @@ def cmd_swing(args: argparse.Namespace, platform: PlatformConfig) -> int:
         return _data(args, cfg, platform)
     if args.action == "bars":
         return _bars(args, cfg, platform)
+    if args.action == "zones":
+        return _zones(args, cfg, platform)
+    if args.action == "chart":
+        return _chart(args, cfg, platform)
     return 1
+
+
+def _chart(args, cfg, platform: PlatformConfig) -> int:
+    from swing.chart import render_html
+    from swing.zones import find_zones
+    from trading_core.marketdata.store import slug
+
+    sym = args.symbol.upper()
+    key, bars = _load(sym, cfg, platform)
+    if bars is None:
+        print(f"no daily candles for {sym} in equity_daily/{key}: run `algo swing data`")
+        return 2
+    rep = find_zones(bars, cfg.zones, date.fromisoformat(args.asof) if args.asof else None)
+    if rep.note:
+        print(f"{sym}: {rep.note}")
+        return 0
+    out = platform.reports_dir / "swing" / f"{slug(sym)}.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render_html(bars, rep, args.days, args.mark, args.mark_label), encoding="utf-8")
+    print(out)
+    return 0
+
+
+def _load(sym: str, cfg, platform: PlatformConfig):
+    from swing.bars import daily_bars
+    from trading_core.marketdata.store import MarketStore
+
+    key = cfg.index_universe if sym.startswith("NIFTY") else cfg.universe
+    return key, daily_bars(MarketStore(platform.marketdata.dir), key, [sym]).get(sym)
 
 
 def _universe(cfg, platform: PlatformConfig) -> int:
@@ -80,13 +123,10 @@ def _data(args, cfg, platform: PlatformConfig) -> int:
 
 
 def _bars(args, cfg, platform: PlatformConfig) -> int:
-    from swing.bars import avg_traded_value_cr, daily_bars, weekly
-    from trading_core.marketdata.store import MarketStore
+    from swing.bars import avg_traded_value_cr, weekly
 
-    store = MarketStore(platform.marketdata.dir)
     sym = args.symbol.upper()
-    key = cfg.index_universe if sym.startswith("NIFTY") else cfg.universe
-    bars = daily_bars(store, key, [sym]).get(sym)
+    key, bars = _load(sym, cfg, platform)
     if bars is None:
         print(f"no daily candles for {sym} in equity_daily/{key}: run `algo swing data`")
         return 2
@@ -97,4 +137,42 @@ def _bars(args, cfg, platform: PlatformConfig) -> int:
     for k in range(max(0, len(shown) - args.last), len(shown)):
         print(f"{str(shown.dates[k]):<12}{shown.open[k]:>10.2f}{shown.high[k]:>10.2f}{shown.low[k]:>10.2f}"
               f"{shown.close[k]:>10.2f}{int(shown.volume[k]):>14,}")
+    return 0
+
+
+def _zones(args, cfg, platform: PlatformConfig) -> int:
+    from swing.zones import find_zones
+
+    sym = args.symbol.upper()
+    key, bars = _load(sym, cfg, platform)
+    if bars is None:
+        print(f"no daily candles for {sym} in equity_daily/{key}: run `algo swing data`")
+        return 2
+    rep = find_zones(bars, cfg.zones, date.fromisoformat(args.asof) if args.asof else None)
+    if rep.note:
+        print(f"{sym}: {rep.note}")
+        return 0
+    print(f"{sym}  as of {rep.asof}  close {rep.close:,.2f}  ATR(14) {rep.atr:,.2f}  "
+          f"zones from the last {cfg.zones.lookback_days} days")
+    print(f"{'zone':<19}{'role':<20}{'score':>6}  {'touch S/R':>9}  {'piv L/H':>7}  {'last test':<11}"
+          f"{'depart':>7}{'recent':>7}  {'vol':>4}  notes")
+    shown_close = False
+    for z in sorted(rep.zones, key=lambda z: -z.hi):
+        if not shown_close and z.hi < rep.close:
+            print(f"{'-- close ' + format(rep.close, ',.2f') + ' ':-<108}")
+            shown_close = True
+        deps = [t.departure_atr for t in z.touches]
+        role = ("flipped " if z.flipped else "") + z.role
+        lows = sum(p.kind == "L" for p in z.pivots)
+        notes = ", ".join(z.confluence + ([f"broken {z.breaks[-1][0]} {z.breaks[-1][1]}"] if z.breaks else []))
+        print(f"{z.lo:>8,.2f}-{z.hi:<10,.2f}{role:<20}{z.score:>6.0f}  "
+              f"{z.count('support'):>4}/{z.count('resistance'):<4}  {lows:>3}/{len(z.pivots) - lows:<3}  "
+              f"{str(z.last_test or '-'):<11}{(sum(deps) / len(deps) if deps else 0):>7.1f}{z.recent_tests:>7}  "
+              f"{'' if z.volume_ratio is None else format(z.volume_ratio, '.1f'):>4}  {notes}")
+        if args.pivots:
+            print("      pivots: " + "  ".join(f"{p.kind}{p.tf} {p.price:,.2f} {p.day}" for p in z.pivots))
+            print("      touches: " + "  ".join(f"{t.side[0].upper()} {t.day} +{t.departure_atr:.1f}"
+                                                 for t in z.touches))
+    if not shown_close:
+        print(f"{'-- close ' + format(rep.close, ',.2f') + ' ':-<108}")
     return 0

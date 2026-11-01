@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from swing.zones import ZoneConfig
 from trading_core.config import load_model
 
 CONFIG_PATH = Path(__file__).with_name("config.yaml")
@@ -25,6 +26,7 @@ class SwingConfig(BaseModel):
     history_days: int = 2920
     min_traded_value_cr: float = 25.0
     alerts_enabled: bool = False
+    zones: ZoneConfig = ZoneConfig()
     indices: list[IndexDef] = []
 
     @property

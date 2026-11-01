@@ -1,6 +1,8 @@
 # Weekend support/resistance swing (stocks)
 
-- **Status:** plan, 1 Nov 2026. W1 (universe and candles) in progress. Numbers marked
+- **Status:** 1 Nov 2026. W1 (universe and candles) and W2 (zone engine, `algo swing zones`,
+  `algo swing chart`) done; you checked POWERGRID's zones against your chart reading and
+  confirmed them (section 4). Next: W3, the zone backtest. Numbers marked
   *(proposed)* are starting points. Your answers of 1 Nov 2026 are in section 11 and are written
   into the sections below.
 - **Type:** stock buying (cash, CNC delivery), swing to positional: held for days to months.
@@ -88,24 +90,55 @@ order-book work in section 7 is the only part that needs the market open.
 
 ## 4. Zones: how they are found and scored
 
-| Step | Rule *(proposed)* |
+Built in W2 (`src/swing/zones.py`, `algo swing zones <SYMBOL>`). Every number is in
+`src/swing/config.yaml` under `zones:`. ATR = the simple 14-day average of the daily true range.
+Zones come from the **last two years** of daily candles; a stock with under 250 days of candles
+gets none (recent listings).
+
+| Step | Rule (as built, 1 Nov 2026) |
 |---|---|
-| Z1 Pivots | swing lows and highs on **daily** (5 bars either side) and **weekly** (3 bars either side) candles. **Daily and weekly pivots count equally** (your answer) |
-| Z2 Grouping | pivots within **1 × ATR(14, daily)** of each other form one zone. Zone = the pivots' price range, at least 0.5 × ATR wide |
-| Z3 Touches | how many times price came into the zone and turned. A daily close back outside the zone within 3 days counts |
-| Z4 Role reversal | a zone that was support and later resistance, or the reverse, scores extra: POWERGRID's 278–293 band |
-| Z5 Departure | how strongly price left the zone (the move in ATRs over the next 5 days). A sharp departure means buyers or sellers were waiting there |
-| Z6 Freshness | fewer recent tests = stronger. Each test uses up some of the waiting orders. A zone tested 5 times this month is weaker than one tested twice in a year |
-| Z7 Volume at price | daily volume spread across each day's range (a volume profile). A high-volume band inside the zone is extra weight |
-| Z8 Confluence | 200-day average in the zone, a round number (₹250, ₹1,000), the 52-week low |
-| Z9 Broken zones | a daily close beyond the zone by > 1 ATR, and staying there 2 days, breaks it. It may now act the other way (Z4) |
-| Z10 Sector context | the stock's sector index is itself near a support zone (S1's rule applied to the index): extra score. Near resistance: less. A stock in several indices uses the best-placed one |
+| Z1 Pivots | swing lows and highs on **daily** (5 bars either side) and **weekly** (3 bars either side) candles. **Daily and weekly pivots count equally** (your answer). A weekly pivot at the same price in the same week as a daily one is the same turn, kept once. Two days at the same low are one turn |
+| Z2 Grouping | pivot prices sorted; a **gap of 0.5 × ATR** or more between neighbours starts a new zone, and a zone wider than **2.5 × ATR** is split at its widest gap. Zone = the pivots' price range, at least 0.5 × ATR wide. A zone needs **2 pivots or 2 touches**. *Why not "within 1 ATR":* POWERGRID's pivots are mostly under ₹3 apart, so chaining within one ATR (₹6) joins everything from 242 to 303 into one zone |
+| Z3 Touches | a **visit**: a bar reaches into the zone from one side; it ends at the first close outside. Out the **same side** = a test that held (a touch), however long price sat inside. Out the other side = it went through. The next touch from a side counts once price has been **1 ATR away** on that side, so pokes at the edge aren't counted again and again. *Why not "back outside within 3 days":* in Oct 2026 POWERGRID sat inside 242–252 for three weeks before leaving upward, and that is the hold you bought |
+| Z4 Role reversal | **flipped** = held as support, broke down (Z9), then held as resistance; or the reverse upward |
+| Z5 Departure | the best move away over the 5 days after the visit ends, in ATRs. Averaged over the zone's touches |
+| Z6 Freshness | touches in the **last 60 sessions**: 0–1 = full marks, 4 or more = none. Each test uses up some of the waiting orders |
+| Z7 Volume at price | each day's volume spread evenly over its range, in bins of 0.1 ATR. The zone's volume per ₹ against the average over the two years: 1.0 = average. Indices have no volume, so it's skipped for them |
+| Z8 Confluence | within 0.25 ATR of the zone: the 200-day average; a round number (half the price's leading power of ten: ₹50 steps at ₹265, ₹500 at ₹1,500); the 52-week low (zones below the price) or high (zones above) |
+| Z9 Broken zones | **2 daily closes running** more than **1 ATR** beyond the zone, on the side opposite the last one, break it |
+| Z10 Sector context | the stock's sector index is itself near a support zone (S1's rule applied to the index): extra score. Near resistance: less. A stock in several indices uses the best-placed one. *Built in W4, with the setups* |
 
-**Strength score** 0–100 = weighted sum of Z3–Z8 and Z10. The weights start equal and get set by
-the backtest (section 9).
+**Strength score** 0–100 = the weighted mean of six parts, each 0–1:
 
-The same engine (Z1–Z9) runs on the **sector indices** first. Their zones feed Z10 and the
-sector overview page (section 8). Indices have no volume, so Z7 is skipped for them.
+| Part | Full marks at |
+|---|---|
+| Touches (Z3) | 4 touches |
+| Role reversal (Z4) | flipped |
+| Departure (Z5) | 3 ATR average |
+| Freshness (Z6) | 0–1 recent touches |
+| Volume (Z7) | 2 × the average |
+| Confluence (Z8) | all 3 |
+
+The weights start equal and get set by the backtest (section 9). Z10 is added in W4.
+
+The same engine runs on the **sector indices** first. Their zones feed Z10 and the sector
+overview page (section 8).
+
+### POWERGRID, first check (candles to 30 Oct 2026; close ₹265, ATR ₹6.16)
+
+| Zone (₹) | Engine says | Score | Your reading (section 1) |
+|---|---|---|---|
+| 289.20–296.65 | flipped resistance, 11 holds from above, 13 from below | 74 | 294–301 resistance |
+| 278.40–287.05 | **flipped**: 18 holds as support through 2025–Jul 2026, broke 7 Aug 2026, now resistance | 81 | 278–293 flipped |
+| 268.50–275.95 | resistance just above: 9 holds from below, last 18 Sep 2026; 5 tests in 60 sessions | 50 | 268–276 resistance: **the target** |
+| 258.95–264.65 | support just below, but tested 4 times in 60 sessions and broke on 8 Oct | 34 | 259–265 support |
+| 254.26–257.34 | one pivot (255.80, Dec 2025), 4 holds | 46 | part of 250–256 |
+| **242.30–252.20** | **support**: 6 lows, 6 holds (Feb 2025, Jan–Feb 2026, 23 Oct 2026), departure 3.2 ATR; round ₹250 and the 52-week low inside | 63 | 242–247 + 250–256: **your ₹249.60 entry is inside it** |
+
+- Z2's gap rule merged 242–247 with 250–252 into one zone, as hoped: the gap from 247.30 to
+  250.00 is under half an ATR.
+- 255.80 stayed separate: its gap from 252.20 is ₹3.60, just over half an ATR (₹3.08).
+- **You confirmed these zones on 1 Nov 2026**, from the chart (`algo swing chart POWERGRID`).
 
 ## 5. Setups (buy only)
 
