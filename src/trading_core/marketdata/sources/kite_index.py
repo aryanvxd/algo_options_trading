@@ -138,14 +138,16 @@ class KiteHistory:
             self.progress(f"{symbol} {lo}..{hi}: {len(candles)} candles")
         return stats
 
-    def equity_daily(self, universe: str, symbols: list[str], start: date, end: date) -> dict[str, int]:
+    def equity_daily(self, universe: str, symbols: list[str], start: date, end: date,
+                     segment: str = "NSE") -> dict[str, int]:
         """Daily bars for index constituents (for the advance/decline filter in backtests).
-        Note: uses today's constituent list, so older years carry some survivorship bias."""
+        Note: uses today's constituent list, so older years carry some survivorship bias.
+        ``segment="INDICES"`` stores indices' own daily bars the same way (volume 0)."""
         by_year: dict[int, list[dict[str, Any]]] = defaultdict(list)
         missing = []
         for sym in symbols:
             try:
-                token = self.token_for(sym, segment="NSE")
+                token = self.token_for(sym, segment=segment)
             except KeyError:
                 missing.append(sym)
                 continue

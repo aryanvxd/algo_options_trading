@@ -21,6 +21,9 @@
   algo data query "select ..."         run SQL over the store with DuckDB
   algo backtest --algo directional_scalp --from 2025-01-01 [--to ...] [--set key=value ...] [--name ...]
                                        run an algo over minute history (results in data/backtests/<name>)
+  algo swing universe                  weekend S/R swing: refresh sector/theme index members from NSE
+  algo swing data [--from ...]         weekend S/R swing: daily candles for those indices and stocks
+  algo swing bars POWERGRID [--weekly] weekend S/R swing: print recent candles
 """
 
 from __future__ import annotations
@@ -364,6 +367,10 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("sql")
     q.add_argument("--limit", type=int, default=30)
     dt.set_defaults(fn=cmd_data)
+
+    from swing.cli import add_parser as add_swing_parser
+
+    add_swing_parser(sub)
     return p
 
 

@@ -1,0 +1,51 @@
+# Weekend support/resistance swing (stocks): every tunable number lives here.
+# Spec: docs/strategy-criteria/weekend-sr-swing.md. Not a BaseAlgo: a weekly batch scan.
+
+universe: swing              # config/universes/swing.yaml, written by `algo swing universe`
+history_days: 2920           # first download: about 8 years of daily candles
+min_traded_value_cr: 25      # S5: 20-day average traded value, ₹ crore (liquid stocks only)
+alerts_enabled: false        # nothing is ever sent to Kite while this is false
+
+# Sector and theme indices (spec section 2). ``name`` is Kite's tradingsymbol (NSE, INDICES);
+# ``csv`` is the index's constituent file on niftyindices.com/IndexConstituent/.
+# Not added (no constituent file found, 1 Nov 2026): NIFTY EV, NIFTY RAILWAYS PSU, NIFTY INTERNET,
+# NIFTY NONCYC CONS, NIFTY NEW CONSUMP, NIFTY INFRALOG. Left out: NIFTY HOUSING, whose file is
+# stale (it still lists HDFC and IBULHSGFIN and pre-2023 industry names); NIFTY CORE HOUSING covers it.
+indices:
+  # sectoral
+  - {name: NIFTY AUTO, kind: sector, csv: ind_niftyautolist.csv}
+  - {name: NIFTY BANK, kind: sector, csv: ind_niftybanklist.csv}
+  - {name: NIFTY FIN SERVICE, kind: sector, csv: ind_niftyfinancelist.csv}
+  - {name: NIFTY FINSEREXBNK, kind: sector, csv: ind_niftyfinancialservicesexbank_list.csv}
+  - {name: NIFTY CAPITAL MKT, kind: sector, csv: ind_niftycapitalmarkets_list.csv}
+  - {name: NIFTY FMCG, kind: sector, csv: ind_niftyfmcglist.csv}
+  - {name: NIFTY HEALTHCARE, kind: sector, csv: ind_niftyhealthcarelist.csv}
+  - {name: NIFTY PHARMA, kind: sector, csv: ind_niftypharmalist.csv}
+  - {name: NIFTY IT, kind: sector, csv: ind_niftyitlist.csv}
+  - {name: NIFTY MEDIA, kind: sector, csv: ind_niftymedialist.csv}
+  - {name: NIFTY METAL, kind: sector, csv: ind_niftymetallist.csv}
+  - {name: NIFTY PVT BANK, kind: sector, csv: ind_nifty_privatebanklist.csv}
+  - {name: NIFTY PSU BANK, kind: sector, csv: ind_niftypsubanklist.csv}
+  - {name: NIFTY REALTY, kind: sector, csv: ind_niftyrealtylist.csv}
+  - {name: NIFTY CONSR DURBL, kind: sector, csv: ind_niftyconsumerdurableslist.csv}
+  - {name: NIFTY OIL AND GAS, kind: sector, csv: ind_niftyoilgaslist.csv}
+  - {name: NIFTY CHEMICALS, kind: sector, csv: ind_niftychemicals_list.csv}
+  # thematic
+  - {name: NIFTY ENERGY, kind: theme, csv: ind_niftyenergylist.csv}
+  - {name: NIFTY INFRA, kind: theme, csv: ind_niftyinfralist.csv}
+  - {name: NIFTY PSE, kind: theme, csv: ind_niftypselist.csv}
+  - {name: NIFTY CPSE, kind: theme, csv: ind_niftycpselist.csv}
+  - {name: NIFTY COMMODITIES, kind: theme, csv: ind_niftycommoditieslist.csv}
+  - {name: NIFTY CONSUMPTION, kind: theme, csv: ind_niftyconsumptionlist.csv}
+  - {name: NIFTY IND DEFENCE, kind: theme, csv: ind_niftyindiadefence_list.csv}
+  - {name: NIFTY MNC, kind: theme, csv: ind_niftymnclist.csv}
+  - {name: NIFTY SERV SECTOR, kind: theme, csv: ind_niftyservicelist.csv}
+  - {name: NIFTY IND DIGITAL, kind: theme, csv: ind_niftyindiadigital_list.csv}
+  - {name: NIFTY INDIA MFG, kind: theme, csv: ind_niftyindiamanufacturing_list.csv}
+  - {name: NIFTY MOBILITY, kind: theme, csv: ind_niftymobility_list.csv}
+  - {name: NIFTY CORE HOUSING, kind: theme, csv: ind_niftycorehousing_list.csv}
+  - {name: NIFTY RURAL, kind: theme, csv: ind_niftyrural_list.csv}
+  - {name: NIFTY IND TOURISM, kind: theme, csv: ind_niftyindiatourism_list.csv}
+  - {name: NIFTY TRANS LOGIS, kind: theme, csv: ind_niftytransportationandlogistics_list.csv}
+  - {name: NIFTY WAVES, kind: theme, csv: ind_niftywaves_list.csv}
+  - {name: NIFTYCONGLOMERATE, kind: theme, csv: ind_niftyconglomerate50_list.csv}

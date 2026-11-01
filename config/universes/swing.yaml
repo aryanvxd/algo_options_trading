@@ -1,0 +1,1781 @@
+# Weekend S/R swing universe: sector and theme indices and their stocks.
+# Written by `algo swing universe` from niftyindices.com constituent files; do not edit by
+# hand (change src/swing/config.yaml and re-run). Refresh after NSE's March and September
+# index reviews. industry: NSE's industry, the stock's sector for the 3-per-sector limit.
+name: swing
+exchange: NSE
+as_of: '2026-11-01'
+symbols:
+- 360ONE
+- AARTIIND
+- ABB
+- ABBOTINDIA
+- ABCAPITAL
+- ABREL
+- ABSLAMC
+- ADANIENSOL
+- ADANIENT
+- ADANIGREEN
+- ADANIPORTS
+- ADANIPOWER
+- AEGISLOG
+- AEGISVOPAK
+- AEQUS
+- AFFLE
+- AIAENG
+- AJANTPHARM
+- ALKEM
+- AMBER
+- AMBUJACEM
+- ANANDRATHI
+- ANANTRAJ
+- ANGELONE
+- ANTHEM
+- APLAPOLLO
+- APOLLO
+- APOLLOHOSP
+- APOLLOTYRE
+- AQYLON
+- ASHOKLEY
+- ASIANPAINT
+- ASTRAL
+- ASTRAMICRO
+- ATGL
+- ATHERENERG
+- ATUL
+- AUBANK
+- AUROPHARMA
+- AWL
+- AXISBANK
+- AXISCADES
+- BAGFILMS
+- BAJAJ-AUTO
+- BAJAJFINSV
+- BAJAJHFL
+- BAJAJHLDNG
+- BAJFINANCE
+- BALAJITELE
+- BALKRISIND
+- BANDHANBNK
+- BANKBARODA
+- BANKINDIA
+- BATAINDIA
+- BBOX
+- BDL
+- BEL
+- BEML
+- BERGEPAINT
+- BHARATFORG
+- BHARTIARTL
+- BHARTIHEXA
+- BHEL
+- BIOCON
+- BLS
+- BLUESTARCO
+- BOSCHLTD
+- BPCL
+- BRIGADE
+- BRITANNIA
+- BSE
+- BSOFT
+- BTML
+- CAMS
+- CANBK
+- CARTRADE
+- CASTROLIND
+- CDSL
+- CEATLTD
+- CENTRALBK
+- CENTUM
+- CESC
+- CGPOWER
+- CHAMBLFERT
+- CHENNPETRO
+- CHOLAFIN
+- CHOLAHLDNG
+- CINELINE
+- CIPLA
+- CMPDI
+- COALINDIA
+- COCHINSHIP
+- COFORGE
+- COLPAL
+- CONCOR
+- COROMANDEL
+- CREATIVEYE
+- CRISIL
+- CROMPTON
+- CUMMINSIND
+- CYIENT
+- DABUR
+- DALBHARAT
+- DATAPATTNS
+- DBCORP
+- DEEPAKFERT
+- DEEPAKNTR
+- DELHIVERY
+- DEN
+- DEVYANI
+- DGCONTENT
+- DISHTV
+- DIVISLAB
+- DIXON
+- DLF
+- DMART
+- DNAMEDIA
+- DRREDDY
+- DYNAMATECH
+- EICHERMOT
+- EIHOTEL
+- ENIL
+- ENRIN
+- ESCORTS
+- ETERNAL
+- EXIDEIND
+- FEDERALBNK
+- FIRSTCRY
+- FLUOROCHEM
+- FORTIS
+- FRACTAL
+- FSL
+- GAIL
+- GLAND
+- GLENMARK
+- GMRAIRPORT
+- GODFRYPHLP
+- GODREJCP
+- GODREJIND
+- GODREJPROP
+- GRASIM
+- GROWW
+- GRSE
+- GTPL
+- GVT&D
+- HAL
+- HATHWAY
+- HAVELLS
+- HCLTECH
+- HDFCAMC
+- HDFCBANK
+- HDFCLIFE
+- HEROMOTOCO
+- HEXT
+- HINDALCO
+- HINDCOPPER
+- HINDPETRO
+- HINDUNILVR
+- HINDZINC
+- HSCL
+- HYUNDAI
+- ICICIAMC
+- ICICIBANK
+- ICICIGI
+- ICICILIFE
+- IDEA
+- IDFCFIRSTB
+- IEX
+- IGL
+- IKS
+- INDHOTEL
+- INDIAMART
+- INDIANB
+- INDIGO
+- INDUSINDBK
+- INDUSTOWER
+- INFY
+- INOXWIND
+- INTELLECT
+- IOB
+- IOC
+- IPCALAB
+- IRCTC
+- IRFC
+- ITC
+- ITCHOTELS
+- ITI
+- JINDALSTEL
+- JIOFIN
+- JKCEMENT
+- JPPOWER
+- JSL
+- JSWENERGY
+- JSWINFRA
+- JSWSTEEL
+- JUBLFOOD
+- JUBLINGREA
+- KAJARIACER
+- KALYANKJIL
+- KAYNES
+- KEC
+- KEI
+- KFINTECH
+- KIMS
+- KOTAKBANK
+- KPITTECH
+- KPRMILL
+- LAURUSLABS
+- LEMONTREE
+- LGEINDIA
+- LICHSGFIN
+- LICI
+- LINDEINDIA
+- LLOYDSME
+- LODHA
+- LT
+- LTF
+- LTM
+- LTTS
+- LUPIN
+- M&M
+- M&MFIN
+- MAHABANK
+- MANKIND
+- MARICO
+- MARUTI
+- MAXHEALTH
+- MAZDOCK
+- MCX
+- MEESHO
+- MFSL
+- MGL
+- MIDHANI
+- MMWL
+- MOTHERSON
+- MOTILALOFS
+- MPHASIS
+- MPSLTD
+- MRF
+- MTARTECH
+- MUKTAARTS
+- MUTHOOTFIN
+- NAM-INDIA
+- NATIONALUM
+- NAUKRI
+- NAVA
+- NAVINFLUOR
+- NAZARA
+- NBCC
+- NDTV
+- NESTLEIND
+- NETWEB
+- NETWORK18
+- NEXTMEDIA
+- NHPC
+- NLCINDIA
+- NMDC
+- NTPC
+- NTPCGREEN
+- NUVAMA
+- NYKAA
+- OBEROIRLTY
+- OFSS
+- OIL
+- ONGC
+- ONMOBILE
+- PAGEIND
+- PARAS
+- PATANJALI
+- PAYTM
+- PCBL
+- PERSISTENT
+- PETRONET
+- PFC
+- PFOCUS
+- PGEL
+- PHOENIXLTD
+- PIDILITIND
+- PIIND
+- PINELABS
+- PIRAMALFIN
+- PNB
+- PNBHOUSING
+- PNC
+- POLICYBZR
+- POLYCAB
+- POONAWALLA
+- POWERGRID
+- POWERINDIA
+- PPLPHARMA
+- PRESTIGE
+- PSB
+- PVRINOX
+- PWL
+- RADAAN
+- RADICO
+- RADIOCITY
+- RAILTEL
+- RAMCOCEM
+- RBLBANK
+- RECLTD
+- RELIANCE
+- RKSWAMY
+- RPOWER
+- SAGILITY
+- SAIL
+- SAILIFE
+- SAMBHAAV
+- SAREGAMA
+- SBICARD
+- SBILIFE
+- SBIN
+- SCHAEFFLER
+- SHEMAROO
+- SHREECEM
+- SHRIRAMFIN
+- SIEMENS
+- SIGNPOST
+- SJVN
+- SOBHA
+- SOLARINDS
+- SONACOMS
+- SRF
+- SUMICHEM
+- SUNDARMFIN
+- SUNPHARMA
+- SUNTV
+- SUPREMEIND
+- SUZLON
+- SWANCORP
+- SWIGGY
+- TATACAP
+- TATACHEM
+- TATACOMM
+- TATACONSUM
+- TATAELXSI
+- TATAPOWER
+- TATASTEEL
+- TATATECH
+- TBOTEK
+- TCS
+- TDPOWERSYS
+- TECHM
+- TEJASNET
+- THANGAMAYL
+- THERMAX
+- TIINDIA
+- TIMKEN
+- TIPSFILMS
+- TIPSMUSIC
+- TITAN
+- TMCV
+- TMPV
+- TORNTPHARM
+- TORNTPOWER
+- TRENT
+- TTML
+- TVSMOTOR
+- TVTODAY
+- UBL
+- UCOBANK
+- UFO
+- ULTRACEMCO
+- UNIMECH
+- UNIONBANK
+- UNITDSPR
+- UNOMINDA
+- UPL
+- URBANCO
+- UTIAMC
+- VAML
+- VBL
+- VEDL
+- VOLTAS
+- WELCORP
+- WHIRLPOOL
+- WIPRO
+- WOCKPHARMA
+- YESBANK
+- ZEEL
+- ZEEMEDIA
+- ZENSARTECH
+- ZENTEC
+- ZYDUSLIFE
+industry:
+  360ONE: Financial Services
+  AARTIIND: Chemicals
+  ABB: Capital Goods
+  ABBOTINDIA: Healthcare
+  ABCAPITAL: Financial Services
+  ABREL: Realty
+  ABSLAMC: Financial Services
+  ADANIENSOL: Power
+  ADANIENT: Metals & Mining
+  ADANIGREEN: Power
+  ADANIPORTS: Services
+  ADANIPOWER: Power
+  AEGISLOG: Oil Gas & Consumable Fuels
+  AEGISVOPAK: Oil Gas & Consumable Fuels
+  AEQUS: Capital Goods
+  AFFLE: Information Technology
+  AIAENG: Capital Goods
+  AJANTPHARM: Healthcare
+  ALKEM: Healthcare
+  AMBER: Consumer Durables
+  AMBUJACEM: Construction Materials
+  ANANDRATHI: Financial Services
+  ANANTRAJ: Realty
+  ANGELONE: Financial Services
+  ANTHEM: Healthcare
+  APLAPOLLO: Capital Goods
+  APOLLO: Capital Goods
+  APOLLOHOSP: Healthcare
+  APOLLOTYRE: Automobile and Auto Components
+  AQYLON: Media Entertainment & Publication
+  ASHOKLEY: Capital Goods
+  ASIANPAINT: Consumer Durables
+  ASTRAL: Capital Goods
+  ASTRAMICRO: Capital Goods
+  ATGL: Oil Gas & Consumable Fuels
+  ATHERENERG: Automobile and Auto Components
+  ATUL: Chemicals
+  AUBANK: Financial Services
+  AUROPHARMA: Healthcare
+  AWL: Fast Moving Consumer Goods
+  AXISBANK: Financial Services
+  AXISCADES: Capital Goods
+  BAGFILMS: Media Entertainment & Publication
+  BAJAJ-AUTO: Automobile and Auto Components
+  BAJAJFINSV: Financial Services
+  BAJAJHFL: Financial Services
+  BAJAJHLDNG: Financial Services
+  BAJFINANCE: Financial Services
+  BALAJITELE: Media Entertainment & Publication
+  BALKRISIND: Automobile and Auto Components
+  BANDHANBNK: Financial Services
+  BANKBARODA: Financial Services
+  BANKINDIA: Financial Services
+  BATAINDIA: Consumer Durables
+  BBOX: Information Technology
+  BDL: Capital Goods
+  BEL: Capital Goods
+  BEML: Capital Goods
+  BERGEPAINT: Consumer Durables
+  BHARATFORG: Automobile and Auto Components
+  BHARTIARTL: Telecommunication
+  BHARTIHEXA: Telecommunication
+  BHEL: Capital Goods
+  BIOCON: Healthcare
+  BLS: Consumer Services
+  BLUESTARCO: Consumer Durables
+  BOSCHLTD: Automobile and Auto Components
+  BPCL: Oil Gas & Consumable Fuels
+  BRIGADE: Realty
+  BRITANNIA: Fast Moving Consumer Goods
+  BSE: Financial Services
+  BSOFT: Information Technology
+  BTML: Media Entertainment & Publication
+  CAMS: Financial Services
+  CANBK: Financial Services
+  CARTRADE: Consumer Services
+  CASTROLIND: Oil Gas & Consumable Fuels
+  CDSL: Financial Services
+  CEATLTD: Automobile and Auto Components
+  CENTRALBK: Financial Services
+  CENTUM: Capital Goods
+  CESC: Power
+  CGPOWER: Capital Goods
+  CHAMBLFERT: Chemicals
+  CHENNPETRO: Oil Gas & Consumable Fuels
+  CHOLAFIN: Financial Services
+  CHOLAHLDNG: Financial Services
+  CINELINE: Media Entertainment & Publication
+  CIPLA: Healthcare
+  CMPDI: Services
+  COALINDIA: Oil Gas & Consumable Fuels
+  COCHINSHIP: Capital Goods
+  COFORGE: Information Technology
+  COLPAL: Fast Moving Consumer Goods
+  CONCOR: Services
+  COROMANDEL: Chemicals
+  CREATIVEYE: Media Entertainment & Publication
+  CRISIL: Financial Services
+  CROMPTON: Consumer Durables
+  CUMMINSIND: Capital Goods
+  CYIENT: Information Technology
+  DABUR: Fast Moving Consumer Goods
+  DALBHARAT: Construction Materials
+  DATAPATTNS: Capital Goods
+  DBCORP: Media Entertainment & Publication
+  DEEPAKFERT: Chemicals
+  DEEPAKNTR: Chemicals
+  DELHIVERY: Services
+  DEN: Media Entertainment & Publication
+  DEVYANI: Consumer Services
+  DGCONTENT: Media Entertainment & Publication
+  DISHTV: Media Entertainment & Publication
+  DIVISLAB: Healthcare
+  DIXON: Consumer Durables
+  DLF: Realty
+  DMART: Consumer Services
+  DNAMEDIA: Media Entertainment & Publication
+  DRREDDY: Healthcare
+  DYNAMATECH: Capital Goods
+  EICHERMOT: Automobile and Auto Components
+  EIHOTEL: Consumer Services
+  ENIL: Media Entertainment & Publication
+  ENRIN: Capital Goods
+  ESCORTS: Capital Goods
+  ETERNAL: Consumer Services
+  EXIDEIND: Automobile and Auto Components
+  FEDERALBNK: Financial Services
+  FIRSTCRY: Consumer Services
+  FLUOROCHEM: Chemicals
+  FORTIS: Healthcare
+  FRACTAL: Information Technology
+  FSL: Services
+  GAIL: Oil Gas & Consumable Fuels
+  GLAND: Healthcare
+  GLENMARK: Healthcare
+  GMRAIRPORT: Services
+  GODFRYPHLP: Fast Moving Consumer Goods
+  GODREJCP: Fast Moving Consumer Goods
+  GODREJIND: Diversified
+  GODREJPROP: Realty
+  GRASIM: Construction Materials
+  GROWW: Financial Services
+  GRSE: Capital Goods
+  GTPL: Media Entertainment & Publication
+  GVT&D: Capital Goods
+  HAL: Capital Goods
+  HATHWAY: Media Entertainment & Publication
+  HAVELLS: Consumer Durables
+  HCLTECH: Information Technology
+  HDFCAMC: Financial Services
+  HDFCBANK: Financial Services
+  HDFCLIFE: Financial Services
+  HEROMOTOCO: Automobile and Auto Components
+  HEXT: Information Technology
+  HINDALCO: Metals & Mining
+  HINDCOPPER: Metals & Mining
+  HINDPETRO: Oil Gas & Consumable Fuels
+  HINDUNILVR: Fast Moving Consumer Goods
+  HINDZINC: Metals & Mining
+  HSCL: Chemicals
+  HYUNDAI: Automobile and Auto Components
+  ICICIAMC: Financial Services
+  ICICIBANK: Financial Services
+  ICICIGI: Financial Services
+  ICICILIFE: Financial Services
+  IDEA: Telecommunication
+  IDFCFIRSTB: Financial Services
+  IEX: Financial Services
+  IGL: Oil Gas & Consumable Fuels
+  IKS: Information Technology
+  INDHOTEL: Consumer Services
+  INDIAMART: Consumer Services
+  INDIANB: Financial Services
+  INDIGO: Services
+  INDUSINDBK: Financial Services
+  INDUSTOWER: Telecommunication
+  INFY: Information Technology
+  INOXWIND: Capital Goods
+  INTELLECT: Information Technology
+  IOB: Financial Services
+  IOC: Oil Gas & Consumable Fuels
+  IPCALAB: Healthcare
+  IRCTC: Consumer Services
+  IRFC: Financial Services
+  ITC: Fast Moving Consumer Goods
+  ITCHOTELS: Consumer Services
+  ITI: Telecommunication
+  JINDALSTEL: Metals & Mining
+  JIOFIN: Financial Services
+  JKCEMENT: Construction Materials
+  JPPOWER: Power
+  JSL: Metals & Mining
+  JSWENERGY: Power
+  JSWINFRA: Services
+  JSWSTEEL: Metals & Mining
+  JUBLFOOD: Consumer Services
+  JUBLINGREA: Chemicals
+  KAJARIACER: Consumer Durables
+  KALYANKJIL: Consumer Durables
+  KAYNES: Capital Goods
+  KEC: Construction
+  KEI: Capital Goods
+  KFINTECH: Financial Services
+  KIMS: Healthcare
+  KOTAKBANK: Financial Services
+  KPITTECH: Information Technology
+  KPRMILL: Textiles
+  LAURUSLABS: Healthcare
+  LEMONTREE: Consumer Services
+  LGEINDIA: Consumer Durables
+  LICHSGFIN: Financial Services
+  LICI: Financial Services
+  LINDEINDIA: Chemicals
+  LLOYDSME: Metals & Mining
+  LODHA: Realty
+  LT: Construction
+  LTF: Financial Services
+  LTM: Information Technology
+  LTTS: Information Technology
+  LUPIN: Healthcare
+  M&M: Automobile and Auto Components
+  M&MFIN: Financial Services
+  MAHABANK: Financial Services
+  MANKIND: Healthcare
+  MARICO: Fast Moving Consumer Goods
+  MARUTI: Automobile and Auto Components
+  MAXHEALTH: Healthcare
+  MAZDOCK: Capital Goods
+  MCX: Financial Services
+  MEESHO: Consumer Services
+  MFSL: Financial Services
+  MGL: Oil Gas & Consumable Fuels
+  MIDHANI: Capital Goods
+  MMWL: Media Entertainment & Publication
+  MOTHERSON: Automobile and Auto Components
+  MOTILALOFS: Financial Services
+  MPHASIS: Information Technology
+  MPSLTD: Media Entertainment & Publication
+  MRF: Automobile and Auto Components
+  MTARTECH: Capital Goods
+  MUKTAARTS: Media Entertainment & Publication
+  MUTHOOTFIN: Financial Services
+  NAM-INDIA: Financial Services
+  NATIONALUM: Metals & Mining
+  NAUKRI: Consumer Services
+  NAVA: Power
+  NAVINFLUOR: Chemicals
+  NAZARA: Media Entertainment & Publication
+  NBCC: Construction
+  NDTV: Media Entertainment & Publication
+  NESTLEIND: Fast Moving Consumer Goods
+  NETWEB: Information Technology
+  NETWORK18: Media Entertainment & Publication
+  NEXTMEDIA: Media Entertainment & Publication
+  NHPC: Power
+  NLCINDIA: Power
+  NMDC: Metals & Mining
+  NTPC: Power
+  NTPCGREEN: Power
+  NUVAMA: Financial Services
+  NYKAA: Consumer Services
+  OBEROIRLTY: Realty
+  OFSS: Information Technology
+  OIL: Oil Gas & Consumable Fuels
+  ONGC: Oil Gas & Consumable Fuels
+  ONMOBILE: Media Entertainment & Publication
+  PAGEIND: Textiles
+  PARAS: Capital Goods
+  PATANJALI: Fast Moving Consumer Goods
+  PAYTM: Financial Services
+  PCBL: Chemicals
+  PERSISTENT: Information Technology
+  PETRONET: Oil Gas & Consumable Fuels
+  PFC: Financial Services
+  PFOCUS: Media Entertainment & Publication
+  PGEL: Consumer Durables
+  PHOENIXLTD: Realty
+  PIDILITIND: Chemicals
+  PIIND: Chemicals
+  PINELABS: Financial Services
+  PIRAMALFIN: Financial Services
+  PNB: Financial Services
+  PNBHOUSING: Financial Services
+  PNC: Media Entertainment & Publication
+  POLICYBZR: Financial Services
+  POLYCAB: Capital Goods
+  POONAWALLA: Financial Services
+  POWERGRID: Power
+  POWERINDIA: Capital Goods
+  PPLPHARMA: Healthcare
+  PRESTIGE: Realty
+  PSB: Financial Services
+  PVRINOX: Media Entertainment & Publication
+  PWL: Consumer Services
+  RADAAN: Media Entertainment & Publication
+  RADICO: Fast Moving Consumer Goods
+  RADIOCITY: Media Entertainment & Publication
+  RAILTEL: Telecommunication
+  RAMCOCEM: Construction Materials
+  RBLBANK: Financial Services
+  RECLTD: Financial Services
+  RELIANCE: Oil Gas & Consumable Fuels
+  RKSWAMY: Media Entertainment & Publication
+  RPOWER: Power
+  SAGILITY: Information Technology
+  SAIL: Metals & Mining
+  SAILIFE: Healthcare
+  SAMBHAAV: Media Entertainment & Publication
+  SAREGAMA: Media Entertainment & Publication
+  SBICARD: Financial Services
+  SBILIFE: Financial Services
+  SBIN: Financial Services
+  SCHAEFFLER: Automobile and Auto Components
+  SHEMAROO: Media Entertainment & Publication
+  SHREECEM: Construction Materials
+  SHRIRAMFIN: Financial Services
+  SIEMENS: Capital Goods
+  SIGNPOST: Media Entertainment & Publication
+  SJVN: Power
+  SOBHA: Realty
+  SOLARINDS: Chemicals
+  SONACOMS: Automobile and Auto Components
+  SRF: Chemicals
+  SUMICHEM: Chemicals
+  SUNDARMFIN: Financial Services
+  SUNPHARMA: Healthcare
+  SUNTV: Media Entertainment & Publication
+  SUPREMEIND: Capital Goods
+  SUZLON: Capital Goods
+  SWANCORP: Chemicals
+  SWIGGY: Consumer Services
+  TATACAP: Financial Services
+  TATACHEM: Chemicals
+  TATACOMM: Telecommunication
+  TATACONSUM: Fast Moving Consumer Goods
+  TATAELXSI: Information Technology
+  TATAPOWER: Power
+  TATASTEEL: Metals & Mining
+  TATATECH: Information Technology
+  TBOTEK: Consumer Services
+  TCS: Information Technology
+  TDPOWERSYS: Capital Goods
+  TECHM: Information Technology
+  TEJASNET: Telecommunication
+  THANGAMAYL: Consumer Durables
+  THERMAX: Capital Goods
+  TIINDIA: Automobile and Auto Components
+  TIMKEN: Capital Goods
+  TIPSFILMS: Media Entertainment & Publication
+  TIPSMUSIC: Media Entertainment & Publication
+  TITAN: Consumer Durables
+  TMCV: Capital Goods
+  TMPV: Automobile and Auto Components
+  TORNTPHARM: Healthcare
+  TORNTPOWER: Power
+  TRENT: Consumer Services
+  TTML: Telecommunication
+  TVSMOTOR: Automobile and Auto Components
+  TVTODAY: Media Entertainment & Publication
+  UBL: Fast Moving Consumer Goods
+  UCOBANK: Financial Services
+  UFO: Media Entertainment & Publication
+  ULTRACEMCO: Construction Materials
+  UNIMECH: Capital Goods
+  UNIONBANK: Financial Services
+  UNITDSPR: Fast Moving Consumer Goods
+  UNOMINDA: Automobile and Auto Components
+  UPL: Chemicals
+  URBANCO: Consumer Services
+  UTIAMC: Financial Services
+  VAML: Metals & Mining
+  VBL: Fast Moving Consumer Goods
+  VEDL: Metals & Mining
+  VOLTAS: Consumer Durables
+  WELCORP: Capital Goods
+  WHIRLPOOL: Consumer Durables
+  WIPRO: Information Technology
+  WOCKPHARMA: Healthcare
+  YESBANK: Financial Services
+  ZEEL: Media Entertainment & Publication
+  ZEEMEDIA: Media Entertainment & Publication
+  ZENSARTECH: Information Technology
+  ZENTEC: Capital Goods
+  ZYDUSLIFE: Healthcare
+indices:
+- name: NIFTY AUTO
+  kind: sector
+  members:
+  - ASHOKLEY
+  - BAJAJ-AUTO
+  - BHARATFORG
+  - BOSCHLTD
+  - EICHERMOT
+  - HEROMOTOCO
+  - HYUNDAI
+  - M&M
+  - MARUTI
+  - MOTHERSON
+  - SONACOMS
+  - TIINDIA
+  - TMPV
+  - TVSMOTOR
+  - UNOMINDA
+- name: NIFTY BANK
+  kind: sector
+  members:
+  - AUBANK
+  - AXISBANK
+  - BANKBARODA
+  - CANBK
+  - FEDERALBNK
+  - HDFCBANK
+  - ICICIBANK
+  - IDFCFIRSTB
+  - INDUSINDBK
+  - KOTAKBANK
+  - PNB
+  - SBIN
+  - UNIONBANK
+  - YESBANK
+- name: NIFTY FIN SERVICE
+  kind: sector
+  members:
+  - AXISBANK
+  - BAJAJFINSV
+  - BAJFINANCE
+  - BSE
+  - CHOLAFIN
+  - HDFCBANK
+  - HDFCLIFE
+  - ICICIBANK
+  - ICICIGI
+  - JIOFIN
+  - KOTAKBANK
+  - LICHSGFIN
+  - MFSL
+  - MUTHOOTFIN
+  - PFC
+  - RECLTD
+  - SBICARD
+  - SBILIFE
+  - SBIN
+  - SHRIRAMFIN
+- name: NIFTY FINSEREXBNK
+  kind: sector
+  members:
+  - 360ONE
+  - ABCAPITAL
+  - ANGELONE
+  - BAJAJFINSV
+  - BAJAJHLDNG
+  - BAJFINANCE
+  - BSE
+  - CAMS
+  - CDSL
+  - CHOLAFIN
+  - HDFCAMC
+  - HDFCLIFE
+  - ICICIGI
+  - ICICILIFE
+  - IRFC
+  - JIOFIN
+  - LICHSGFIN
+  - LICI
+  - LTF
+  - MCX
+  - MFSL
+  - MUTHOOTFIN
+  - PAYTM
+  - PFC
+  - PNBHOUSING
+  - POLICYBZR
+  - RECLTD
+  - SBICARD
+  - SBILIFE
+  - SHRIRAMFIN
+- name: NIFTY CAPITAL MKT
+  kind: sector
+  members:
+  - 360ONE
+  - ABSLAMC
+  - ANANDRATHI
+  - ANGELONE
+  - BSE
+  - CAMS
+  - CDSL
+  - GROWW
+  - HDFCAMC
+  - ICICIAMC
+  - IEX
+  - KFINTECH
+  - MCX
+  - MOTILALOFS
+  - NAM-INDIA
+  - NUVAMA
+  - UTIAMC
+- name: NIFTY FMCG
+  kind: sector
+  members:
+  - BRITANNIA
+  - COLPAL
+  - DABUR
+  - GODFRYPHLP
+  - GODREJCP
+  - HINDUNILVR
+  - ITC
+  - MARICO
+  - NESTLEIND
+  - PATANJALI
+  - RADICO
+  - TATACONSUM
+  - UBL
+  - UNITDSPR
+  - VBL
+- name: NIFTY HEALTHCARE
+  kind: sector
+  members:
+  - ABBOTINDIA
+  - ALKEM
+  - APOLLOHOSP
+  - AUROPHARMA
+  - BIOCON
+  - CIPLA
+  - DIVISLAB
+  - DRREDDY
+  - FORTIS
+  - GLAND
+  - GLENMARK
+  - IPCALAB
+  - KIMS
+  - LAURUSLABS
+  - LUPIN
+  - MANKIND
+  - MAXHEALTH
+  - SUNPHARMA
+  - TORNTPHARM
+  - ZYDUSLIFE
+- name: NIFTY PHARMA
+  kind: sector
+  members:
+  - ABBOTINDIA
+  - AJANTPHARM
+  - ALKEM
+  - AUROPHARMA
+  - BIOCON
+  - CIPLA
+  - DIVISLAB
+  - DRREDDY
+  - GLAND
+  - GLENMARK
+  - IPCALAB
+  - LAURUSLABS
+  - LUPIN
+  - MANKIND
+  - PPLPHARMA
+  - SAILIFE
+  - SUNPHARMA
+  - TORNTPHARM
+  - WOCKPHARMA
+  - ZYDUSLIFE
+- name: NIFTY IT
+  kind: sector
+  members:
+  - COFORGE
+  - HCLTECH
+  - INFY
+  - LTM
+  - MPHASIS
+  - OFSS
+  - PERSISTENT
+  - TCS
+  - TECHM
+  - WIPRO
+- name: NIFTY MEDIA
+  kind: sector
+  members:
+  - DBCORP
+  - MPSLTD
+  - NAZARA
+  - NETWORK18
+  - PFOCUS
+  - PVRINOX
+  - SAREGAMA
+  - SUNTV
+  - TIPSMUSIC
+  - ZEEL
+- name: NIFTY METAL
+  kind: sector
+  members:
+  - ADANIENT
+  - APLAPOLLO
+  - HINDALCO
+  - HINDCOPPER
+  - HINDZINC
+  - JINDALSTEL
+  - JSL
+  - JSWSTEEL
+  - LLOYDSME
+  - NATIONALUM
+  - NMDC
+  - SAIL
+  - TATASTEEL
+  - VAML
+  - VEDL
+- name: NIFTY PVT BANK
+  kind: sector
+  members:
+  - AXISBANK
+  - BANDHANBNK
+  - FEDERALBNK
+  - HDFCBANK
+  - ICICIBANK
+  - IDFCFIRSTB
+  - INDUSINDBK
+  - KOTAKBANK
+  - RBLBANK
+  - YESBANK
+- name: NIFTY PSU BANK
+  kind: sector
+  members:
+  - BANKBARODA
+  - BANKINDIA
+  - CANBK
+  - CENTRALBK
+  - INDIANB
+  - IOB
+  - MAHABANK
+  - PNB
+  - PSB
+  - SBIN
+  - UCOBANK
+  - UNIONBANK
+- name: NIFTY REALTY
+  kind: sector
+  members:
+  - ABREL
+  - ANANTRAJ
+  - BRIGADE
+  - DLF
+  - GODREJPROP
+  - LODHA
+  - OBEROIRLTY
+  - PHOENIXLTD
+  - PRESTIGE
+  - SOBHA
+- name: NIFTY CONSR DURBL
+  kind: sector
+  members:
+  - AMBER
+  - BATAINDIA
+  - BLUESTARCO
+  - CROMPTON
+  - DIXON
+  - HAVELLS
+  - KAJARIACER
+  - KALYANKJIL
+  - LGEINDIA
+  - PGEL
+  - THANGAMAYL
+  - TITAN
+  - VOLTAS
+  - WHIRLPOOL
+- name: NIFTY OIL AND GAS
+  kind: sector
+  members:
+  - AEGISLOG
+  - AEGISVOPAK
+  - ATGL
+  - BPCL
+  - CASTROLIND
+  - CHENNPETRO
+  - GAIL
+  - HINDPETRO
+  - IGL
+  - IOC
+  - MGL
+  - OIL
+  - ONGC
+  - PETRONET
+  - RELIANCE
+- name: NIFTY CHEMICALS
+  kind: sector
+  members:
+  - AARTIIND
+  - ATUL
+  - CHAMBLFERT
+  - COROMANDEL
+  - DEEPAKFERT
+  - DEEPAKNTR
+  - FLUOROCHEM
+  - HSCL
+  - JUBLINGREA
+  - LINDEINDIA
+  - NAVINFLUOR
+  - PCBL
+  - PIDILITIND
+  - PIIND
+  - SOLARINDS
+  - SRF
+  - SUMICHEM
+  - SWANCORP
+  - TATACHEM
+  - UPL
+- name: NIFTY ENERGY
+  kind: theme
+  members:
+  - ABB
+  - ADANIENSOL
+  - ADANIGREEN
+  - ADANIPOWER
+  - AEGISLOG
+  - ATGL
+  - BHEL
+  - BPCL
+  - CASTROLIND
+  - CESC
+  - CGPOWER
+  - COALINDIA
+  - ENRIN
+  - GAIL
+  - GVT&D
+  - HINDPETRO
+  - IGL
+  - INOXWIND
+  - IOC
+  - JPPOWER
+  - JSWENERGY
+  - MGL
+  - NAVA
+  - NHPC
+  - NLCINDIA
+  - NTPC
+  - NTPCGREEN
+  - OIL
+  - ONGC
+  - PETRONET
+  - POWERGRID
+  - POWERINDIA
+  - RELIANCE
+  - RPOWER
+  - SIEMENS
+  - SUZLON
+  - TATAPOWER
+  - TDPOWERSYS
+  - THERMAX
+  - TORNTPOWER
+- name: NIFTY INFRA
+  kind: theme
+  members:
+  - ADANIGREEN
+  - ADANIPORTS
+  - ADANIPOWER
+  - APOLLOHOSP
+  - ASHOKLEY
+  - BHARATFORG
+  - BHARTIARTL
+  - BPCL
+  - CGPOWER
+  - CUMMINSIND
+  - DLF
+  - FORTIS
+  - GAIL
+  - GRASIM
+  - GVT&D
+  - HINDPETRO
+  - INDHOTEL
+  - INDIGO
+  - INDUSTOWER
+  - IOC
+  - LT
+  - MAXHEALTH
+  - MOTHERSON
+  - NTPC
+  - ONGC
+  - POWERGRID
+  - RELIANCE
+  - SUZLON
+  - TATAPOWER
+  - ULTRACEMCO
+- name: NIFTY PSE
+  kind: theme
+  members:
+  - BEL
+  - BHEL
+  - BPCL
+  - COALINDIA
+  - CONCOR
+  - GAIL
+  - HAL
+  - HINDPETRO
+  - IOC
+  - IRFC
+  - NATIONALUM
+  - NHPC
+  - NMDC
+  - NTPC
+  - OIL
+  - ONGC
+  - PFC
+  - POWERGRID
+  - RECLTD
+  - SAIL
+- name: NIFTY CPSE
+  kind: theme
+  members:
+  - BEL
+  - COALINDIA
+  - COCHINSHIP
+  - NBCC
+  - NHPC
+  - NLCINDIA
+  - NTPC
+  - OIL
+  - ONGC
+  - POWERGRID
+  - SJVN
+- name: NIFTY COMMODITIES
+  kind: theme
+  members:
+  - ADANIENSOL
+  - ADANIGREEN
+  - ADANIPOWER
+  - AMBUJACEM
+  - APLAPOLLO
+  - BPCL
+  - COALINDIA
+  - GRASIM
+  - HINDALCO
+  - HINDPETRO
+  - IOC
+  - JINDALSTEL
+  - JSWENERGY
+  - JSWSTEEL
+  - NHPC
+  - NMDC
+  - NTPC
+  - OIL
+  - ONGC
+  - PIDILITIND
+  - RELIANCE
+  - SHREECEM
+  - SRF
+  - TATAPOWER
+  - TATASTEEL
+  - TORNTPOWER
+  - ULTRACEMCO
+  - UPL
+  - VAML
+  - VEDL
+- name: NIFTY CONSUMPTION
+  kind: theme
+  members:
+  - APOLLOHOSP
+  - ASIANPAINT
+  - BAJAJ-AUTO
+  - BHARTIARTL
+  - BRITANNIA
+  - DIXON
+  - DLF
+  - DMART
+  - EICHERMOT
+  - ETERNAL
+  - FORTIS
+  - GODREJCP
+  - HEROMOTOCO
+  - HINDUNILVR
+  - INDHOTEL
+  - INDIGO
+  - ITC
+  - M&M
+  - MARUTI
+  - MAXHEALTH
+  - NAUKRI
+  - NESTLEIND
+  - TATACONSUM
+  - TATAPOWER
+  - TITAN
+  - TORNTPHARM
+  - TRENT
+  - TVSMOTOR
+  - UNITDSPR
+  - VBL
+- name: NIFTY IND DEFENCE
+  kind: theme
+  members:
+  - AEQUS
+  - APOLLO
+  - ASTRAMICRO
+  - AXISCADES
+  - BDL
+  - BEL
+  - BEML
+  - BHARATFORG
+  - CENTUM
+  - COCHINSHIP
+  - DATAPATTNS
+  - DYNAMATECH
+  - GRSE
+  - HAL
+  - MAZDOCK
+  - MIDHANI
+  - MTARTECH
+  - PARAS
+  - SOLARINDS
+  - UNIMECH
+  - ZENTEC
+- name: NIFTY MNC
+  kind: theme
+  members:
+  - ABB
+  - ABBOTINDIA
+  - AMBUJACEM
+  - ASHOKLEY
+  - AWL
+  - BOSCHLTD
+  - BRITANNIA
+  - CASTROLIND
+  - COLPAL
+  - CRISIL
+  - CUMMINSIND
+  - ENRIN
+  - ESCORTS
+  - GLAND
+  - HINDUNILVR
+  - HYUNDAI
+  - LGEINDIA
+  - LINDEINDIA
+  - MARUTI
+  - NAM-INDIA
+  - NESTLEIND
+  - OFSS
+  - POWERINDIA
+  - SCHAEFFLER
+  - SIEMENS
+  - TIMKEN
+  - UBL
+  - UNITDSPR
+  - VAML
+  - VEDL
+- name: NIFTY SERV SECTOR
+  kind: theme
+  members:
+  - ADANIPORTS
+  - ADANIPOWER
+  - APOLLOHOSP
+  - AXISBANK
+  - BAJAJFINSV
+  - BAJFINANCE
+  - BHARTIARTL
+  - BSE
+  - DMART
+  - ETERNAL
+  - FEDERALBNK
+  - HCLTECH
+  - HDFCBANK
+  - HDFCLIFE
+  - ICICIBANK
+  - INDIGO
+  - INDUSINDBK
+  - INFY
+  - JIOFIN
+  - KOTAKBANK
+  - MAXHEALTH
+  - NTPC
+  - POWERGRID
+  - SBILIFE
+  - SBIN
+  - SHRIRAMFIN
+  - TATAPOWER
+  - TCS
+  - TECHM
+  - WIPRO
+- name: NIFTY IND DIGITAL
+  kind: theme
+  members:
+  - AFFLE
+  - BBOX
+  - BHARTIARTL
+  - BHARTIHEXA
+  - BLS
+  - BSOFT
+  - CARTRADE
+  - COFORGE
+  - CYIENT
+  - ETERNAL
+  - FIRSTCRY
+  - FRACTAL
+  - HCLTECH
+  - HEXT
+  - IDEA
+  - IKS
+  - INDIAMART
+  - INFY
+  - INTELLECT
+  - IRCTC
+  - ITI
+  - KPITTECH
+  - LTM
+  - LTTS
+  - MEESHO
+  - MPHASIS
+  - NAUKRI
+  - NETWEB
+  - NYKAA
+  - OFSS
+  - PAYTM
+  - PERSISTENT
+  - PINELABS
+  - POLICYBZR
+  - PWL
+  - RAILTEL
+  - SAGILITY
+  - SWIGGY
+  - TATACOMM
+  - TATAELXSI
+  - TATATECH
+  - TBOTEK
+  - TCS
+  - TECHM
+  - TEJASNET
+  - TTML
+  - URBANCO
+  - WIPRO
+  - ZENSARTECH
+- name: NIFTY INDIA MFG
+  kind: theme
+  members:
+  - ABB
+  - AIAENG
+  - ALKEM
+  - AMBER
+  - ANTHEM
+  - APLAPOLLO
+  - ASHOKLEY
+  - ASTRAL
+  - AUROPHARMA
+  - BAJAJ-AUTO
+  - BALKRISIND
+  - BEL
+  - BHARATFORG
+  - BLUESTARCO
+  - BOSCHLTD
+  - BPCL
+  - CGPOWER
+  - CIPLA
+  - COCHINSHIP
+  - COROMANDEL
+  - CROMPTON
+  - CUMMINSIND
+  - DIVISLAB
+  - DIXON
+  - DRREDDY
+  - EICHERMOT
+  - ENRIN
+  - ESCORTS
+  - GVT&D
+  - HAL
+  - HAVELLS
+  - HINDALCO
+  - HINDCOPPER
+  - HINDZINC
+  - HSCL
+  - HYUNDAI
+  - IOC
+  - JINDALSTEL
+  - JSWSTEEL
+  - KAYNES
+  - KEI
+  - KPRMILL
+  - LAURUSLABS
+  - LINDEINDIA
+  - LUPIN
+  - M&M
+  - MARUTI
+  - MAZDOCK
+  - MOTHERSON
+  - MRF
+  - NAVINFLUOR
+  - PAGEIND
+  - PIDILITIND
+  - PIIND
+  - POLYCAB
+  - POWERINDIA
+  - RELIANCE
+  - SIEMENS
+  - SOLARINDS
+  - SONACOMS
+  - SRF
+  - SUNPHARMA
+  - SUPREMEIND
+  - SUZLON
+  - TATASTEEL
+  - TIINDIA
+  - TMCV
+  - TMPV
+  - TORNTPHARM
+  - TVSMOTOR
+  - UNOMINDA
+  - UPL
+  - VAML
+  - VEDL
+  - VOLTAS
+  - WELCORP
+  - ZYDUSLIFE
+- name: NIFTY MOBILITY
+  kind: theme
+  members:
+  - ADANIPORTS
+  - ASHOKLEY
+  - BAJAJ-AUTO
+  - BALKRISIND
+  - BHARATFORG
+  - BOSCHLTD
+  - BPCL
+  - CONCOR
+  - DELHIVERY
+  - EICHERMOT
+  - ETERNAL
+  - GAIL
+  - GMRAIRPORT
+  - HEROMOTOCO
+  - HINDPETRO
+  - HYUNDAI
+  - INDIGO
+  - IOC
+  - M&M
+  - MARUTI
+  - MOTHERSON
+  - MRF
+  - PETRONET
+  - RELIANCE
+  - SONACOMS
+  - SWIGGY
+  - TIINDIA
+  - TMCV
+  - TMPV
+  - TVSMOTOR
+- name: NIFTY CORE HOUSING
+  kind: theme
+  members:
+  - AMBER
+  - AMBUJACEM
+  - ASIANPAINT
+  - BAJAJHFL
+  - BERGEPAINT
+  - BLUESTARCO
+  - BRIGADE
+  - CROMPTON
+  - DALBHARAT
+  - DIXON
+  - DLF
+  - GODREJPROP
+  - GRASIM
+  - HAVELLS
+  - JKCEMENT
+  - KAJARIACER
+  - KEI
+  - LGEINDIA
+  - LICHSGFIN
+  - LODHA
+  - OBEROIRLTY
+  - PGEL
+  - PHOENIXLTD
+  - PNBHOUSING
+  - POLYCAB
+  - PRESTIGE
+  - RAMCOCEM
+  - SHREECEM
+  - ULTRACEMCO
+  - VOLTAS
+- name: NIFTY RURAL
+  kind: theme
+  members:
+  - ADANIGREEN
+  - ADANIPOWER
+  - AMBUJACEM
+  - ASHOKLEY
+  - ASIANPAINT
+  - ASTRAL
+  - ATHERENERG
+  - BAJAJ-AUTO
+  - BAJFINANCE
+  - BANDHANBNK
+  - BANKBARODA
+  - BANKINDIA
+  - BERGEPAINT
+  - BHARTIARTL
+  - BLUESTARCO
+  - BRITANNIA
+  - CHOLAFIN
+  - COLPAL
+  - COROMANDEL
+  - CROMPTON
+  - CUMMINSIND
+  - DABUR
+  - DALBHARAT
+  - DIXON
+  - EICHERMOT
+  - GODREJCP
+  - GRASIM
+  - HAVELLS
+  - HDFCLIFE
+  - HEROMOTOCO
+  - HINDUNILVR
+  - HYUNDAI
+  - ICICILIFE
+  - IDEA
+  - INDIANB
+  - IRCTC
+  - ITC
+  - JKCEMENT
+  - JSWENERGY
+  - LICHSGFIN
+  - LICI
+  - LTF
+  - M&M
+  - M&MFIN
+  - MARICO
+  - MARUTI
+  - MFSL
+  - MUTHOOTFIN
+  - NESTLEIND
+  - NHPC
+  - NTPC
+  - PATANJALI
+  - PIIND
+  - PIRAMALFIN
+  - PNB
+  - PNBHOUSING
+  - POONAWALLA
+  - SBICARD
+  - SBILIFE
+  - SBIN
+  - SHREECEM
+  - SHRIRAMFIN
+  - SUNDARMFIN
+  - SUPREMEIND
+  - TATACAP
+  - TATACOMM
+  - TATACONSUM
+  - TATAPOWER
+  - TMCV
+  - TMPV
+  - TORNTPOWER
+  - TVSMOTOR
+  - ULTRACEMCO
+  - UPL
+  - VOLTAS
+- name: NIFTY IND TOURISM
+  kind: theme
+  members:
+  - BLS
+  - DEVYANI
+  - EIHOTEL
+  - GMRAIRPORT
+  - INDHOTEL
+  - INDIGO
+  - IRCTC
+  - ITCHOTELS
+  - JUBLFOOD
+  - LEMONTREE
+  - TBOTEK
+- name: NIFTY TRANS LOGIS
+  kind: theme
+  members:
+  - ADANIPORTS
+  - APOLLOTYRE
+  - ASHOKLEY
+  - BAJAJ-AUTO
+  - BALKRISIND
+  - BHARATFORG
+  - BOSCHLTD
+  - CONCOR
+  - DELHIVERY
+  - EICHERMOT
+  - ETERNAL
+  - EXIDEIND
+  - GMRAIRPORT
+  - HEROMOTOCO
+  - HYUNDAI
+  - INDIGO
+  - IRCTC
+  - M&M
+  - MARUTI
+  - MAZDOCK
+  - MOTHERSON
+  - MRF
+  - SCHAEFFLER
+  - SONACOMS
+  - SWIGGY
+  - TIINDIA
+  - TMCV
+  - TMPV
+  - TVSMOTOR
+  - UNOMINDA
+- name: NIFTY WAVES
+  kind: theme
+  members:
+  - AQYLON
+  - BAGFILMS
+  - BALAJITELE
+  - BTML
+  - CINELINE
+  - CREATIVEYE
+  - DEN
+  - DGCONTENT
+  - DISHTV
+  - DNAMEDIA
+  - ENIL
+  - GTPL
+  - HATHWAY
+  - MMWL
+  - MUKTAARTS
+  - NAZARA
+  - NDTV
+  - NETWORK18
+  - NEXTMEDIA
+  - ONMOBILE
+  - PFOCUS
+  - PNC
+  - PVRINOX
+  - RADAAN
+  - RADIOCITY
+  - RKSWAMY
+  - SAMBHAAV
+  - SAREGAMA
+  - SHEMAROO
+  - SIGNPOST
+  - SUNTV
+  - TIPSFILMS
+  - TIPSMUSIC
+  - TVTODAY
+  - UFO
+  - ZEEL
+  - ZEEMEDIA
+- name: NIFTYCONGLOMERATE
+  kind: theme
+  members:
+  - ABCAPITAL
+  - ADANIENT
+  - ADANIGREEN
+  - ADANIPORTS
+  - ADANIPOWER
+  - AMBUJACEM
+  - BAJAJ-AUTO
+  - BAJAJFINSV
+  - BAJAJHLDNG
+  - BAJFINANCE
+  - CEATLTD
+  - CESC
+  - CGPOWER
+  - CHOLAFIN
+  - CHOLAHLDNG
+  - CMPDI
+  - COALINDIA
+  - COROMANDEL
+  - FSL
+  - GODREJCP
+  - GODREJIND
+  - GODREJPROP
+  - GRASIM
+  - HINDALCO
+  - HINDZINC
+  - IDEA
+  - JINDALSTEL
+  - JSL
+  - JSWENERGY
+  - JSWINFRA
+  - JSWSTEEL
+  - KEC
+  - LT
+  - LTF
+  - LTM
+  - LTTS
+  - M&M
+  - M&MFIN
+  - PCBL
+  - TATASTEEL
+  - TCS
+  - TECHM
+  - TIINDIA
+  - TITAN
+  - TMCV
+  - TRENT
+  - ULTRACEMCO
+  - VAML
+  - VEDL
+  - ZENSARTECH
