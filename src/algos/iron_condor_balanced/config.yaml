@@ -1,0 +1,54 @@
+# NIFTY weekly short iron condor, balanced premium — every tunable number lives here.
+# Spec: docs/strategy-criteria/iron-condor-balanced.md. Times are IST and must be quoted ("09:45").
+# The original condor (src/algos/iron_condor) stays unchanged as the baseline.
+
+algo_id: iron_condor_balanced
+name: NIFTY Short Iron Condor (balanced premium)
+version: "0.1.0"
+description: Sell OTM CE+PE of about the same premium, buy further-OTM hedges; CE/PE imbalance log-only.
+mode: paper            # live is disabled in v1
+lots: 2
+
+underlying: NIFTY
+index_symbol: "NIFTY 50"
+vix_symbol: "INDIA VIX"
+strike_step: 50
+trade_window_days: 5   # every trading day (expiry day + the 4 before it)
+
+# Same-width shorts (the starting point for balancing), keyed by trading days to expiry.
+width_by_dte: {0: 500, 1: 550, 2: 600, 3: 600, 4: 600}
+# Distance from each short to its hedge.
+hedge_by_dte: {0: 200, 1: 250, 2: 300, 3: 300, 4: 300}
+subscribe_buffer_pts: 350   # 200 as the original + strikes.max_shift_pts
+
+filters:
+  vix_max: 20                  # India VIX must be below this, else skip the day
+  pcr_range_pts: 1000          # PCR (put OI / call OI) over ATM ± this — logged only
+  # The CE/PE premium balance is logged only (spec B4): no limit here.
+
+strikes:
+  mode: balanced               # balanced | width (width = the original's ATM ± width/2)
+  min_distance_by_dte: {0: 225, 1: 225, 2: 250, 3: 250, 4: 250}   # a short never closer to spot
+  max_shift_pts: 150           # a short at most this far from its same-width strike
+
+entry:
+  max_spread_pts: 2.0          # wait while any leg's bid-ask is wider than this
+  min_credit_by_dte: {0: 5, 1: 10, 2: 10, 3: 10, 4: 10}   # 0 DTE condors only take in 5-8 pts
+
+exits:
+  pnl_basis: gross             # stop/target on premium movement at bid/ask, before charges
+  # Points × lot size × lots (2 lots: 15 pts = ₹1,950). 3-4 DTE credits are 75-110 pts, so the
+  # original's 5-pt stop fired on noise (study: docs/design/iron-condor-premium-balance-study.md).
+  stop_by_dte: {0: 5, 1: 8, 2: 15, 3: 15, 4: 15}
+  target_by_dte: {0: 5, 1: 8, 2: 15, 3: 15, 4: 15}
+  premium_blowout_mult: 1.35   # exit if cost to close >= 1.35 × entry credit
+  short_leg_mult: 2.0          # ... or any short leg doubles
+  stale_feed_seconds: 10
+
+schedule:
+  day_check: "08:15"           # past-due steps run as soon as the algo starts (~09:35)
+  start_feed: "09:15"
+  entry: "09:45"
+  entry_deadline: "10:30"      # no entry by then = no trade today
+  square_off: "15:15"
+  report: "15:35"

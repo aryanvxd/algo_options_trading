@@ -4,6 +4,9 @@
   Section 9 lists what changed from v1.
 - **Mode:** paper, 2 lots (from 27 Oct 2026; was 1).
 - **Last changed:** 28 Oct 2026 — trades every trading day (was the last 3 days of the cycle).
+- **Successor (4 Nov 2026):** [iron-condor-balanced.md](iron-condor-balanced.md) runs live with
+  balanced-premium shorts, E4 log-only and stops by DTE. This version stays unchanged as the
+  baseline and is replayed each evening on the recorded ticks.
 
 ## 1. Idea
 

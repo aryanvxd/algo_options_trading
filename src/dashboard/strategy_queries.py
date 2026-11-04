@@ -21,6 +21,7 @@ from trading_core.strategy.position import Leg
 
 DOCS = {"directional_scalp": "docs/strategy-criteria/directional-scalp.md",
         "iron_condor": "docs/strategy-criteria/iron-condor.md",
+        "iron_condor_balanced": "docs/strategy-criteria/iron-condor-balanced.md",
         "strangle_scalp": "docs/strategy-criteria/long-strangle-scalp.md",
         "weekend_condor": "docs/strategy-criteria/weekend-iron-condor.md"}
 MAX_CURVE_POINTS = 600

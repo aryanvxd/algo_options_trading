@@ -65,7 +65,13 @@ def select_condor(spot: float, width: int, hedge: int, step: int, chain: list[In
     plan = plan_strikes(spot, width, hedge, step, pe, ce)
     if plan is None:
         return Rejection("could not place all four strikes on the listed chain")
+    return price_plan(plan, chain, quote, qty, max_spread_pts, min_credit_pts)
 
+
+def price_plan(plan: StrikePlan, chain: list[InstrumentInfo], quote: Callable[[int], Tick | None], qty: int,
+               max_spread_pts: float, min_credit_pts: float) -> Selection | Rejection:
+    """Legs for ``plan`` at executable prices; reject on a missing book, a wide spread or a small credit."""
+    by_key = {(i.strike, i.instrument_type): i for i in chain}
     specs = [("LONG_PE", "PE", BUY, plan.long_pe), ("LONG_CE", "CE", BUY, plan.long_ce),
              ("SHORT_PE", "PE", SELL, plan.short_pe), ("SHORT_CE", "CE", SELL, plan.short_ce)]
     legs: list[Leg] = []
