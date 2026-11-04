@@ -120,13 +120,16 @@ back to 23,912 at 15:15. VIX 16.06.
 
 | Exits | Strikes | 28 Oct | 29 Oct | 30 Oct | 2 Nov | 3 Nov | 4 Nov | Total |
 |---|---|---|---|---|---|---|---|---|
-| stop 5 / target 8 (now) | same width | −1,152 | −1,087 | +833 | −1,087 | +638 | −925 | **−2,780** |
-| stop 5 / target 8 (now) | mean premium | −1,029 | −971 | +846 | +853 | +404 | −925 | −822 |
+| stop 5 / target 8 (the original's exits, without its E4 and minimum credit) | same width | −1,152 | −1,087 | +833 | −1,087 | +638 | −925 | **−2,780** |
+| stop 5 / target 8 | mean premium | −1,029 | −971 | +846 | +853 | +404 | −925 | −822 |
 | stop 15 / target 8 | same width | +850 | −2,407 | +833 | +853 | +638 | +863 | +1,630 |
 | stop 15 / target 15 | same width | +1,766 | −2,407 | +1,802 | +989 | +638 | +1,773 | **+4,561** |
 | stop 15 / target 15 | mean premium | +1,025 | −2,264 | +1,880 | +1,074 | +404 | +1,773 | +3,892 |
 | hold to 12:30 | same width | +1,285 | −470 | −561 | +277 | +242 | −171 | +602 |
 | hold to 15:15 | same width | +1,584 | −2,407 | +2,120 | +989 | +638 | +2,104 | +5,028 |
+
+These are from the study's own simulator. The same days through the real algos on real candles:
+`iron_condor_balanced` +₹3,582, `iron_condor` −₹2,383 ([backtest.md](backtest.md), section 5a).
 
 The 5-pt stop turned three eventual winners into losses (28 Oct, 2 Nov, 4 Nov) and saved one
 (29 Oct). With the 5-pt stop, mean premium beats same width by about ₹2,000. With a wider stop

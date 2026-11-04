@@ -93,9 +93,9 @@ DTE). Order: buy both hedges first, then sell both shorts.
 
 **Why wider than the original's 5 / 8:** on 3–4 DTE the credit is 75–110 pts, and a 5-pt stop
 fired on ordinary noise. From 28 Oct to 4 Nov it turned three eventual winners into losses (28 Oct,
-2 Nov, 4 Nov) and saved one (29 Oct). On real prices these settings make +₹3,723 over those six
-days. The original rules lose ₹2,780 on the same days. Six days is a small sample: review after 20
-paper days.
+2 Nov, 4 Nov) and saved one (29 Oct). On real candles (`algo backtest --options real`, 28 Oct –
+4 Nov) this algo makes +₹3,582 over six trades; the original makes −₹2,383 over four trades,
+skipping two days. It ran on one trending week: review after 20 trading days.
 
 ## 7. Capital allocation
 
@@ -118,18 +118,26 @@ P&L). Also:
 - a `strikes` check: the mode, the target premium, the same-width shorts and the shorts chosen,
   with each one's distance from spot and mid price.
 
-## 9. Running it next to the original
+## 9. Testing it against the original
 
-Kite allows 3 WebSocket connections per API key, and each live `algo run` uses one. Monday,
-Tuesday and Friday afternoon already use 3. So:
+The laptop can't stay on until 15:30 at the office, so the comparison doesn't depend on it. Each
+evening:
 
-- Run **this algo live** every day.
-- Replay the **original** each evening on the ticks this algo recorded:
-  `algo run --algo iron_condor --replay <date>`. A replay needs no connection. Both strategies
-  subscribe the same strikes (ATM ± 1,000), so the original sees the same prices.
-- Keep the process running until the 15:35 report. The runner records ticks until square-off,
-  even after the trade closes or the day is skipped. A closed window stops the recording, as on
-  2 and 3 Nov.
+```bash
+.venv/Scripts/algo data options
+.venv/Scripts/algo backtest --algo iron_condor_balanced --from 2026-10-28 --options real
+.venv/Scripts/algo backtest --algo iron_condor --from 2026-10-28 --options real
+```
+
+- Both algos run on the same real candles, so the results compare directly.
+- `algo data options` needs that day's `algo login`, and must run by each expiry's evening
+  ([backtest.md](../design/backtest.md), section 5a).
+- **These backtests are the result to judge by**, not the morning paper run.
+- A morning paper run is optional. It records real bid/ask for as long as the laptop is on. If the
+  laptop shuts with a trade open, nothing watches its stop or squares it off, so that run's P&L
+  means nothing.
+- Kite allows 3 WebSocket connections per API key, and Monday, Tuesday and Friday afternoon already
+  use 3. So run only one of the two condors live.
 
 ## 10. Open questions
 

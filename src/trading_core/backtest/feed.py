@@ -2,7 +2,8 @@
 
 Bar instruments (index, VIX, future, stocks) tick 4 times a minute, 15 s apart, along the usual
 OHLC path: open, the extreme nearer the open, the other extreme, close. Options are priced on
-demand with Black-76 (docs/design/backtest.md, section 3).
+demand with Black-76 (docs/design/backtest.md, section 3), or quoted from real 1-minute candles when
+the feed is given them (section 5a).
 """
 
 from __future__ import annotations
@@ -28,6 +29,11 @@ class OptionSpec:
     expiry: date
 
 
+def half_spread(price: float) -> float:
+    """Half the bid-ask spread on real candles: the median measured in the recorded ticks."""
+    return 0.025 if price < 5 else 0.05 if price < 40 else 0.1 if price < 100 else 0.5
+
+
 def _round05(x: float) -> float:
     return round(round(x * 20) / 20, 2)
 
@@ -42,9 +48,10 @@ def _path(b: Bars, i: int, wicks: bool = True) -> tuple[float, float, float, flo
 class BacktestFeed(MarketFeed):
     def __init__(self, data: DayData, clock: Clock, bars: dict[int, Bars], options: dict[int, OptionSpec],
                  index_token: int, vix_token: int | None, r: float, spread_frac: float = 0.001,
-                 no_wicks: Iterable[int] = ()):
+                 no_wicks: Iterable[int] = (), real: dict[int, Bars] | None = None):
         self.data, self.clock, self.r, self.spread_frac = data, clock, r, spread_frac
         self.bars, self.options = bars, options
+        self.real = real                # option token -> real candles; None = modelled prices
         self.index_token, self.vix_token = index_token, vix_token
         # Stocks move open -> close only: on their shared 15 s grid every stock would otherwise touch
         # its low and high at the same moment, a lock-step wick real stocks never make.
@@ -112,7 +119,21 @@ class BacktestFeed(MarketFeed):
         b = self.bars.get(token) if token is not None else None
         return _last_close_of(b, now.hour * 60 + now.minute) if b is not None else None
 
+    def _real_tick(self, token: int, now: datetime) -> Tick | None:
+        """Close of the contract's last finished minute: a candle is only known once it has closed."""
+        b = self.real.get(token)
+        i = bisect_right(b.minutes, now.hour * 60 + now.minute - 1) - 1 if b is not None else -1
+        if i < 0:
+            return None
+        mid = float(b.close[i])
+        half = half_spread(mid)
+        return Tick(token, ltp=mid, bid=max(0.05, round(mid - half, 2)), ask=round(mid + half, 2),
+                    ts=now.replace(second=0, microsecond=0), received_at=now, bid_qty=1000, ask_qty=1000,
+                    oi=int(b.oi[i]) if b.oi is not None else None)
+
     def _option_tick(self, token: int, now: datetime) -> Tick | None:
+        if self.real is not None:
+            return self._real_tick(token, now)
         spec = self.options.get(token)
         spot_t = self._bar_tick(self.index_token, now) if spec else None
         if spec is None or spot_t is None:

@@ -91,6 +91,7 @@ algo data index --from 2021-01-01                # NIFTY 50 + India VIX 1-min fr
 algo data constituents --from 2021-01-01         # NIFTY 50 stocks, daily
 algo data constituents-1m --from 2024-11-01      # NIFTY 50 stocks, 1-min (backtest breadth; needs algo login)
 algo data futures --from 2024-11-01              # NIFTY continuous future, 1-min with volume (backtest VWAP)
+algo data options                                # every evening: real 1-min option candles, index, future, stocks
 algo data status                                 # what is stored, first/last day, problems
 algo data query "select * from options_eod where trade_date = '2026-10-22' limit 5"
 ```

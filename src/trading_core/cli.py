@@ -11,6 +11,7 @@
   algo kill --algo iron_condor         ask a running algo to square off and stop
   algo report --algo iron_condor       recent daily summaries
   algo dashboard                       local web dashboard on http://127.0.0.1:8050
+  algo data options                    every evening: real 1-min option candles, index, future, stocks
   algo data status                     what is in the Parquet market-data store
   algo data index --from 2021-01-01    NIFTY 50 + India VIX 1-min history from Kite
   algo data constituents --from ...    NIFTY 50 constituents daily bars from Kite (breadth filter)
@@ -21,6 +22,7 @@
   algo data query "select ..."         run SQL over the store with DuckDB
   algo backtest --algo directional_scalp --from 2025-01-01 [--to ...] [--set key=value ...] [--name ...]
                                        run an algo over minute history (results in data/backtests/<name>)
+                                       add --options real to use saved option candles, not modelled prices
 """
 
 from __future__ import annotations
@@ -54,7 +56,21 @@ def cmd_login(args: argparse.Namespace, platform: PlatformConfig) -> int:
 
     login(_db(platform), platform.kite, load_secrets(platform.root), LiveClock(), open_browser=not args.no_browser)
     print("Logged in.")
+    _data_reminder(platform)
     return 0
+
+
+def _data_reminder(platform: PlatformConfig) -> None:
+    from trading_core.db.migrate import holidays
+    from trading_core.market.calendar import MarketCalendar
+    from trading_core.marketdata.manifest import Manifest
+    from trading_core.marketdata.sources.kite_options import reminder
+
+    db = _db(platform)
+    for underlying in platform.marketdata.underlyings:
+        note = reminder(db, Manifest(db), underlying, MarketCalendar(holidays(db)), LiveClock().now())
+        if note:
+            print(note)
 
 
 def cmd_logout(args: argparse.Namespace, platform: PlatformConfig) -> int:
@@ -148,7 +164,7 @@ def cmd_backtest(args: argparse.Namespace, platform: PlatformConfig) -> int:
 
     end = date.fromisoformat(args.end) if args.end else date.today()
     folder = run_backtest(platform, args.algo, date.fromisoformat(args.start), end, overrides=parse_sets(args.set),
-                          name=args.name, lot_size=args.lot_size)
+                          name=args.name, lot_size=args.lot_size, option_prices=args.options)
     print_summary(json.loads((folder / "summary.json").read_text(encoding="utf-8")))
     print()
     print(f"Results: {folder}")
@@ -208,9 +224,9 @@ def cmd_data(args: argparse.Namespace, platform: PlatformConfig) -> int:
         if not rows:
             print(f"Store is empty ({md.dir}).")
             return 0
-        print(f"{'dataset':<15}{'key':<12}{'source':<10}{'first':<12}{'last':<12}{'days':>6}{'rows':>12}{'bad':>5}")
+        print(f"{'dataset':<15}{'key':<18}{'source':<10}{'first':<12}{'last':<12}{'days':>6}{'rows':>12}{'bad':>5}")
         for r in rows:
-            print(f"{r['dataset']:<15}{r['key']:<12}{r['source']:<10}{str(r['first']):<12}{str(r['last']):<12}"
+            print(f"{r['dataset']:<15}{r['key']:<18}{r['source']:<10}{str(r['first']):<12}{str(r['last']):<12}"
                   f"{r['days']:>6}{r['rows']:>12,}{r['problems']:>5}")
         return 0
 
@@ -242,6 +258,9 @@ def cmd_data(args: argparse.Namespace, platform: PlatformConfig) -> int:
                           progress=print)
         print(nse.download(start, end, force=args.force))
         return 0
+
+    if args.action == "options":
+        return _data_options(args, platform, db, store, manifest)
 
     if args.action in ("index", "constituents", "constituents-1m", "futures"):
         from trading_core.config import load_universe
@@ -279,6 +298,57 @@ def cmd_data(args: argparse.Namespace, platform: PlatformConfig) -> int:
         print(f"({table.num_rows} rows{', showing ' + str(len(shown)) if len(shown) < table.num_rows else ''})")
         return 0
     return 1
+
+
+def _data_options(args: argparse.Namespace, platform: PlatformConfig, db: Database, store, manifest) -> int:
+    """The evening download: NIFTY and VIX first (the option rows carry the spot), then the options,
+    which can't wait, then the future and stocks, which can."""
+    from datetime import timedelta
+
+    from trading_core.config import load_universe
+    from trading_core.db.migrate import holidays
+    from trading_core.kite.client import KiteClient
+    from trading_core.market.calendar import MarketCalendar
+    from trading_core.marketdata.sources.kite_index import KiteHistory
+    from trading_core.marketdata.sources.kite_options import KiteOptions, last_complete_session
+
+    md, now = platform.marketdata, LiveClock().now()
+    calendar = MarketCalendar(holidays(db))
+    last = last_complete_session(now, calendar)
+    end = min(date.fromisoformat(args.end), last) if args.end else last
+    start = date.fromisoformat(args.start) if args.start else end - timedelta(days=md.option_lookback_days)
+    print(f"Fetching finished sessions from {start} to {end}.")
+
+    client = KiteClient.from_db(db, platform.kite, load_secrets(platform.root), LiveClock())
+    kh = KiteHistory(client, store, manifest, progress=print)
+    for sym in md.index_symbols:
+        print(sym, kh.index_1m(sym, start, end))
+
+    options = KiteOptions(client, store, manifest, calendar, progress=print)
+    failed = 0
+    for underlying in md.underlyings:
+        results = options.download(underlying, underlying_index(underlying), start, end, now.date(),
+                                   args.expiries or md.option_expiries, force=args.force)
+        print(f"\n{'expiry':<12}{'contracts':>10}{'days stored':>13}{'new days':>10}{'candles':>11}{'failed':>8}")
+        for r in results:
+            print(f"{r.expiry.isoformat():<12}{r.contracts:>10}{r.stored_days:>13}{r.new_days:>10}{r.rows:>11,}"
+                  f"{len(r.failed):>8}")
+            failed += len(r.failed)
+        if results:
+            nearest = results[0].expiry
+            print(f"\nNext deadline: run this by the evening of {nearest:%a %d %b}. Kite drops that expiry the "
+                  "next day.")
+    if failed:
+        print(f"{failed} contract(s) failed; run this again to fetch those days.")
+
+    for underlying in md.underlyings:
+        print(f"{underlying} FUT", kh.futures_1m(underlying, start, end))
+    print(kh.equity_1m([k.split(":", 1)[1] for k in load_universe(platform, "nifty50")], start, end))
+    return 1 if failed else 0
+
+
+def underlying_index(underlying: str) -> str:
+    return {"NIFTY": "NIFTY 50", "BANKNIFTY": "NIFTY BANK"}[underlying]
 
 
 def _cell(v) -> str:
@@ -322,6 +392,8 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--set", action="append", metavar="KEY=VALUE", help="override a config value (repeatable)")
     b.add_argument("--name", help="folder name (default: algo + dates + time)")
     b.add_argument("--lot-size", type=int, default=65, help="lot size used on every day (default 65)")
+    b.add_argument("--options", choices=["model", "real"], default="model",
+                   help="option prices: modelled, or real candles saved by `algo data options`")
     b.set_defaults(fn=cmd_backtest)
 
     k = sub.add_parser("kill", help="send a control command to a running algo")
@@ -355,6 +427,12 @@ def build_parser() -> argparse.ArgumentParser:
             a.add_argument("--symbol", help='one index, e.g. "NIFTY 50" (default: all in config)')
         if name in ("constituents", "constituents-1m"):
             a.add_argument("--universe", default="nifty50")
+    op = dsub.add_parser("options", help="every evening: real 1-min option candles of the nearest expiries, "
+                                         "plus index, future and stocks (needs algo login)")
+    op.add_argument("--from", dest="start", metavar="YYYY-MM-DD", help="default: 59 days back; stored days are skipped")
+    op.add_argument("--to", dest="end", metavar="YYYY-MM-DD", help="default: the last finished session")
+    op.add_argument("--expiries", type=int, help="how many of the nearest expiries (default: from config)")
+    op.add_argument("--force", action="store_true", help="re-download option days already stored")
     cal = dsub.add_parser("calendar", help="market calendar: economic events, results, India releases")
     cal.add_argument("--force", action="store_true", help="refetch sources already fetched today")
     ex = dsub.add_parser("export-recorder", help="move recorded live ticks to Parquet")
