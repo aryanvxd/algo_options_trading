@@ -66,6 +66,25 @@ def test_flat_day_runs_to_the_time_exit_with_the_dte_stop(platform, db):
     assert one(db, m.DailySummary, run_id=run_id).traded
 
 
+def turning(f):
+    """Premium decays until midday, then comes back: a winning trade that turns around."""
+    return 1.0 - 1.6 * f if f < 0.5 else 0.2 + 1.6 * (f - 0.5)
+
+
+def test_winner_that_turns_around_exits_on_the_trail_with_a_profit(platform, db):
+    run_id = run(platform, db, spot=lambda f: 25000.0, decay=turning)
+    pos = one(db, m.Position, run_id=run_id)
+    assert pos.exit_reason == "TRAILING_STOP" and pos.gross_pnl > 0
+    assert time(12, 0) < pos.exit_time.time() < time(15, 0)
+    assert pos.params["trail_points"] == [6, 3]
+
+
+def test_trail_can_be_switched_off(platform, db):
+    off = {**DEFAULTS, "exits": {**DEFAULTS["exits"], "trail_arm_by_dte": {i: 0 for i in range(5)}}}
+    run_id = run(platform, db, overrides=off, spot=lambda f: 25000.0, decay=turning)
+    assert one(db, m.Position, run_id=run_id).exit_reason != "TRAILING_STOP"
+
+
 def test_trend_hits_the_dte_stop(platform, db):
     run_id = run(platform, db, spot=lambda f: 25000.0 + 1600 * f, decay=lambda f: 1.0, strikes=(24300, 26000))
     pos = one(db, m.Position, run_id=run_id)

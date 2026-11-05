@@ -1,7 +1,7 @@
 # NIFTY short iron condor — balanced premium
 
-- **Status:** v0.1 — implemented in `src/algos/iron_condor_balanced/` (config version 0.1.0,
-  4 Nov 2026).
+- **Status:** v0.2 — implemented in `src/algos/iron_condor_balanced/` (config version 0.2.0,
+  5 Nov 2026: adds the trailing profit stop).
 - **Mode:** paper, 2 lots.
 - **Relation to [iron-condor.md](iron-condor.md):** same idea, schedule and order of execution.
   The original condor stays unchanged as the baseline. This one changes the rules that made it skip
@@ -81,15 +81,37 @@ DTE). Order: buy both hedges first, then sell both shorts.
 | 1 | Kill switch | `algo kill`, or 5 errors in a row |
 | 2 | Stale feed | no tick for 10 s |
 | 3 | Stop loss | gross P&L ≤ −stop pts × lot size × lots, **stop by DTE** |
-| 4 | Premium blow-out | cost to close ≥ 1.35 × credit, or a short leg at 2× its entry |
-| 5 | Target | gross P&L ≥ +target pts × lot size × lots, **target by DTE** |
-| 6 | Time exit | 15:15 |
+| 4 | Trailing profit stop | once gross P&L has reached +arm pts, exit if it falls give-back pts below its peak, **by DTE** |
+| 5 | Premium blow-out | cost to close ≥ 1.35 × credit, or a short leg at 2× its entry |
+| 6 | Target | gross P&L ≥ +target pts × lot size × lots, **target by DTE** |
+| 7 | Time exit | 15:15 |
 
 | DTE | Typical credit | Stop | Target | 2 lots (130): stop / target |
 |---|---|---|---|---|
 | 0 | 5–8 | 5 pts | 5 pts | −₹650 / +₹650 |
 | 1 | 20–27 | 8 pts | 8 pts | −₹1,040 / +₹1,040 |
 | 2–4 | 55–110 | 15 pts | 15 pts | −₹1,950 / +₹1,950 |
+
+| DTE | Trail arms at | Give-back from the peak | 2 lots (130): arm / give-back |
+|---|---|---|---|
+| 0–1 | off | off | their 5- and 8-pt targets take profit first |
+| 2–4 | 6 pts | 3 pts | +₹780 / ₹390 |
+
+**Why a trailing stop:** on 5 Nov the live trade reached +₹1,254 gross at 12:52, then NIFTY's rally
+took it to the stop for −₹2,002. With this rule it would have left at about +₹845 gross (the
+real 5-second snapshots; arm ₹800, give back ₹400).
+
+**Why these numbers:**
+- **In points, by DTE, not rupees:** points scale with the lots, and a 0–1 DTE credit is far smaller.
+- **Narrow trails cost more than they save.** Arming at ₹250–350 and giving back the same turned
+  the seven days from 28 Oct to 5 Nov from +₹1,145 to −₹1,538 or worse, because normal swings in a
+  winning trade set it off (entries at 09:45, 5 Nov at its real 09:53).
+- **It can't help a trade that never made money.** On 29 Oct the best before the stop was +₹202.
+- **It has a cost:** it cut 30 Oct from +₹1,821 to +₹266, a dip that later reached target.
+- **It depends on the entry.** A 09:45 entry on 5 Nov peaked at only +₹546, so the trail never
+  armed and the stop still hit.
+
+The peak is held in memory, so a restart during a trade starts the trail again from that moment.
 
 **Why wider than the original's 5 / 8:** on 3–4 DTE the credit is 75–110 pts, and a 5-pt stop
 fired on ordinary noise. From 28 Oct to 4 Nov it turned three eventual winners into losses (28 Oct,
@@ -144,4 +166,5 @@ evening:
 1. After 20 paper days: compare with the original's replays. Is the gain from B4/B6, from the
    strikes or from the exits? Each part can be switched off in the config and replayed.
 2. Stop and target on 2–4 DTE: 15 pts each, or scale them to the credit?
+   Review the trail (arm 6, give back 3) on the same 20 days.
 3. 0 DTE: is a 5–8 pt credit worth the ₹210 of charges, or skip expiry day?

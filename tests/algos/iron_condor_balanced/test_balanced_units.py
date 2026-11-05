@@ -1,10 +1,13 @@
 from datetime import time
+from types import SimpleNamespace
 
 import pytest
 
+from algos.iron_condor_balanced.exits import ProfitTrail
 from algos.iron_condor_balanced.settings import IronCondorBalancedConfig
 from algos.iron_condor_balanced.strike_selector import pick_balanced
 from tests.algos.iron_condor.test_iron_condor_units import chain, quote_fn
+from trading_core.risk.engine import RiskContext
 from trading_core.strategy import registry
 
 
@@ -62,6 +65,38 @@ def test_config_yaml_matches_the_spec():
     assert [cfg.min_credit_for(d) for d in range(5)] == [5, 10, 10, 10, 10]
     assert not hasattr(cfg.filters, "max_premium_ratio")     # the balance is logged only
     assert cfg.lots == 2 and cfg.trade_window_days == 5
+
+
+def trail_ctx(pnl, complete=True):
+    mark = SimpleNamespace(gross_pnl=pnl, net_pnl=pnl - 200, complete=complete)
+    return RiskContext(now=None, position=None, mark=mark, feed_age_s=0.5)
+
+
+def test_trail_waits_until_armed_and_never_acts_before_it():
+    rule = ProfitTrail(780, 390, "gross")
+    assert [rule.check(trail_ctx(p)) for p in (100, 700, 300, -900, 779)] == [None] * 5
+
+
+def test_trail_exits_the_give_back_below_the_peak():
+    rule = ProfitTrail(780, 390, "gross")
+    for p in (500, 780, 1000, 1254, 900):
+        assert rule.check(trail_ctx(p)) is None           # 1254 - 390 = 864
+    assert "peak 1254" in rule.check(trail_ctx(864))
+
+
+def test_trail_ignores_an_incomplete_mark_and_can_use_net_pnl():
+    rule = ProfitTrail(780, 390, "gross")
+    assert rule.check(trail_ctx(1000)) is None
+    assert rule.check(trail_ctx(-500, complete=False)) is None
+    net = ProfitTrail(780, 390, "net")
+    assert net.check(trail_ctx(1000)) is None             # net 800: armed
+    assert net.check(trail_ctx(600)) is not None          # net 400 <= 800 - 390
+
+
+def test_trail_table_is_off_on_0_and_1_dte():
+    _, cfg = registry.load("iron_condor_balanced")
+    assert [cfg.trail_for(d) for d in range(5)] == [(0, 0), (0, 0), (6, 3), (6, 3), (6, 3)]
+    assert cfg.version == "0.2.0"
 
 
 def test_original_condor_is_unchanged():

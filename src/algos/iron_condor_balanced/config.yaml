@@ -4,7 +4,7 @@
 
 algo_id: iron_condor_balanced
 name: NIFTY Short Iron Condor (balanced premium)
-version: "0.1.0"
+version: "0.2.0"
 description: Sell OTM CE+PE of about the same premium, buy further-OTM hedges; CE/PE imbalance log-only.
 mode: paper            # live is disabled in v1
 lots: 2
@@ -41,6 +41,10 @@ exits:
   # original's 5-pt stop fired on noise (study: docs/design/iron-condor-premium-balance-study.md).
   stop_by_dte: {0: 5, 1: 8, 2: 15, 3: 15, 4: 15}
   target_by_dte: {0: 5, 1: 8, 2: 15, 3: 15, 4: 15}
+  # Trailing profit stop: armed at +arm points, exits give-back points below the peak (0 = off).
+  # Off on 0-1 DTE: their targets take profit first. 2 lots: 6 pts = ₹780, 3 pts = ₹390.
+  trail_arm_by_dte: {0: 0, 1: 0, 2: 6, 3: 6, 4: 6}
+  trail_give_by_dte: {0: 0, 1: 0, 2: 3, 3: 3, 4: 3}
   premium_blowout_mult: 1.35   # exit if cost to close >= 1.35 × entry credit
   short_leg_mult: 2.0          # ... or any short leg doubles
   stale_feed_seconds: 10

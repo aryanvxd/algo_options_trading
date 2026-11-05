@@ -43,6 +43,9 @@ class BalancedExitConfig(ExitConfig):
     target_points: None = None
     stop_by_dte: dict[int, float] = Field(default_factory=lambda: {0: 5.0, 1: 8.0, 2: 15.0})
     target_by_dte: dict[int, float] = Field(default_factory=lambda: {0: 5.0, 1: 8.0, 2: 15.0})
+    # Trailing profit stop: armed at +arm points, exits give-back points below the peak. 0 = off.
+    trail_arm_by_dte: dict[int, float] = Field(default_factory=lambda: {0: 0.0, 2: 6.0})
+    trail_give_by_dte: dict[int, float] = Field(default_factory=lambda: {0: 0.0, 2: 3.0})
 
 
 class IronCondorBalancedConfig(IronCondorConfig):
@@ -62,3 +65,6 @@ class IronCondorBalancedConfig(IronCondorConfig):
 
     def target_for(self, dte: int) -> float:
         return self._for_dte(self.exits.target_by_dte, dte)
+
+    def trail_for(self, dte: int) -> tuple[float, float]:
+        return self._for_dte(self.exits.trail_arm_by_dte, dte), self._for_dte(self.exits.trail_give_by_dte, dte)

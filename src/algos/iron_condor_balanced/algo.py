@@ -4,7 +4,8 @@ The original condor (``algos.iron_condor``) with these changes:
 - the CE/PE premium balance is journaled only, never a reason to wait or skip;
 - the shorts are the PE and CE whose premiums are closest to the average of the same-width pair
   (``strikes.mode: width`` restores the original strikes);
-- minimum credit, stop and target are set per DTE; last entry 10:30.
+- minimum credit, stop and target are set per DTE; last entry 10:30;
+- a trailing profit stop gives back only so much of a trade's peak (2-4 DTE).
 Day check, feed, VIX, PCR and events logging, hedges-first execution and the exit rules are the
 original's.
 """
@@ -16,9 +17,12 @@ from datetime import datetime, time
 from algos.iron_condor import filters
 from algos.iron_condor.algo import IronCondorAlgo
 from algos.iron_condor.strike_selector import Rejection, price_plan, select_condor
+from algos.iron_condor_balanced.exits import ProfitTrail
 from algos.iron_condor_balanced.settings import IronCondorBalancedConfig
 from algos.iron_condor_balanced.strike_selector import pick_balanced
 from trading_core.market.options import atm_strike
+from trading_core.risk.engine import ExitRule
+from trading_core.risk.rules import PnlStop
 from trading_core.strategy.base import SkipDay
 from trading_core.strategy.position import Position
 
@@ -42,6 +46,14 @@ class IronCondorBalancedAlgo(IronCondorAlgo):
     @property
     def target_rupees(self) -> float:
         return self.cfg.target_for(self._dte) * self.qty
+
+    def build_exit_rules(self) -> list[ExitRule]:
+        rules = super().build_exit_rules()
+        arm, give = self.cfg.trail_for(self._dte)
+        if arm > 0:         # right after the stop, in the priority order of the spec
+            at = next(i for i, r in enumerate(rules) if isinstance(r, PnlStop)) + 1
+            rules.insert(at, ProfitTrail(arm * self.qty, give * self.qty, self.cfg.exits.pnl_basis))
+        return rules
 
     def build_entry(self) -> Position | None:
         cfg = self.cfg
@@ -114,7 +126,8 @@ class IronCondorBalancedAlgo(IronCondorAlgo):
                                     strike_mode=cfg.strikes.mode, premium_ratio=round(balance.ratio, 3),
                                     premium_richer=balance.richer, pcr=pcr,
                                     target_premium=pick.target if pick else None,
-                                    stop_points=cfg.stop_for(dte), target_points=cfg.target_for(dte)))
+                                    stop_points=cfg.stop_for(dte), target_points=cfg.target_for(dte),
+                                    trail_points=cfg.trail_for(dte)))
 
 
 ALGO = IronCondorBalancedAlgo
