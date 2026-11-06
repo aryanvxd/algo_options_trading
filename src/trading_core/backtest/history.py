@@ -3,15 +3,19 @@
   index_1m   NIFTY 50, INDIA VIX, NIFTY FUT (continuous future, with volume)
   equity_1m  the NIFTY 50 stocks
   options_eod  that day's chain (expiries, strikes) and the previous day's (IV smile)
+  options_1m   real option candles, for ``--options real`` (docs/design/backtest.md, section 5a)
 """
 
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from trading_core.marketdata.store import MarketStore
@@ -31,6 +35,7 @@ class Bars:
     low: np.ndarray
     close: np.ndarray
     volume: np.ndarray
+    oi: np.ndarray | None = None       # option candles only
 
     @property
     def last_close(self) -> float | None:
@@ -42,9 +47,10 @@ class Bars:
             return None
         ts = t["ts"].to_pylist()
         vol = t["volume"].to_numpy(zero_copy_only=False) if "volume" in t.column_names else np.zeros(len(ts))
+        oi = t["oi"].to_numpy(zero_copy_only=False).astype(float) if "oi" in t.column_names else None
         return cls(np.array([x.hour * 60 + x.minute for x in ts]),
                    *(t[c].to_numpy(zero_copy_only=False).astype(float) for c in ("open", "high", "low", "close")),
-                   np.nan_to_num(vol.astype(float)))
+                   np.nan_to_num(vol.astype(float)), oi if oi is None else np.nan_to_num(oi))
 
 
 @dataclass
@@ -78,6 +84,7 @@ class DayData:
     strikes: list[float]
     smile: Smile
     vix_ref: float | None              # previous day's closing VIX (the smile's level)
+    real: dict[tuple[float, str], Bars] | None = None    # real candles by (strike, CE/PE)
 
     def coverage(self) -> dict[str, object]:
         return dict(vix=self.vix is not None, fut=self.fut is not None, stocks=len(self.stocks),
@@ -112,7 +119,24 @@ class History:
         t = self.store.read("options_eod", self.underlying, "nse", day=d)
         return t if t is not None and t.num_rows else None
 
-    def load(self, d: date, prev: date | None, symbols: list[str], trading: set[date]) -> DayData | None:
+    def real_options(self, d: date, expected: date) -> tuple[date, dict[tuple[float, str], Bars]] | None:
+        """That day's candles for its nearest expiry, or None when that expiry was never saved. Later
+        expiries in the file don't count: running on one would quietly trade the wrong contract.
+        ``expected`` is the bhavcopy's expiry or the weekday rule's (a holiday can only move it earlier)."""
+        t = self.store.read("options_1m", self.underlying, self.source, day=d)
+        if t is None or t.num_rows == 0:
+            return None
+        expiries = sorted(e for e in pc.unique(t["expiry"]).to_pylist() if e is not None and e >= d)
+        if not expiries or expiries[0] > expected:
+            return None
+        t = t.filter(pc.equal(t["expiry"], pa.scalar(expiries[0], type=pa.date32())))
+        groups: dict[tuple[float, str], list[int]] = defaultdict(list)
+        for i, key in enumerate(zip(t["strike"].to_pylist(), t["opt_type"].to_pylist())):
+            groups[key].append(i)
+        return expiries[0], {k: Bars.from_table(t.take(pa.array(idx))) for k, idx in groups.items()}
+
+    def load(self, d: date, prev: date | None, symbols: list[str], trading: set[date],
+             real: bool = False) -> DayData | None:
         index = self._bars("index_1m", INDEX, d)
         if index is None:
             return None
@@ -126,10 +150,15 @@ class History:
         chain, prev_chain = self._chain(d), self._chain(prev)
         expiry, source = self._expiry(d, chain or prev_chain, trading)
         strikes = self._strikes(expiry, chain or prev_chain, index)
+        candles = None
+        if real and (got := self.real_options(d, expiry)) is not None:
+            expiry, candles = got
+            strikes = sorted({k for k, _ in candles})
         return DayData(day=d, index=index, vix=self._bars("index_1m", VIX, d),
                        fut=self._bars("index_1m", f"{self.underlying} FUT", d), stocks=stocks, prev_closes=prev_closes,
                        expiry=expiry, expiry_source=source, strikes=strikes,
-                       smile=self._smile(prev_chain, expiry, index), vix_ref=vix_prev.last_close if vix_prev else None)
+                       smile=self._smile(prev_chain, expiry, index), vix_ref=vix_prev.last_close if vix_prev else None,
+                       real=candles)
 
     def _expiry(self, d: date, chain, trading: set[date]) -> tuple[date, str]:
         if chain is not None:

@@ -71,6 +71,8 @@ class MarketDataConfig(BaseModel):
     risk_free_rate: float = 0.065          # for Black-76 IV/greeks; ~91-day T-bill yield
     sqlite_tick_keep_days: int = 7         # recorded ticks stay in SQLite this long after export
     nse_request_interval_s: float = 1.0    # politeness delay between NSE archive downloads
+    option_expiries: int = 3               # `algo data options`: how many of the nearest expiries to save
+    option_lookback_days: int = 59         # ... and how far back it looks for days not stored yet
 
 
 class PlatformConfig(BaseModel):

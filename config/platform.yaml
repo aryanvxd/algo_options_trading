@@ -51,3 +51,5 @@ marketdata:
   risk_free_rate: 0.065                      # Black-76 IV/greeks; roughly the 91-day T-bill yield
   sqlite_tick_keep_days: 7                   # recorded ticks are kept in SQLite this long after export
   nse_request_interval_s: 1.0                # be polite to NSE's archive server
+  option_expiries: 3                         # `algo data options`: nearest expiries saved every evening
+  option_lookback_days: 59                   # ... and how far back it looks for days not stored yet

@@ -10,9 +10,11 @@ from sqlalchemy import select
 from trading_core.db import models as m
 from trading_core.db.engine import Database
 
+MODEL_LIMIT = ("Option prices are modelled (Black-76, the previous day's IV smile scaled by India VIX): fine for "
+               "ranking settings, not a promise of rupees.")
+REAL_LIMIT = ("Option prices are real 1-minute closes; bid/ask is the close ± a measured typical spread, and a stop "
+              "between two closes fires at the next close.")
 LIMITS = [
-    "Option prices are modelled (Black-76, the previous day's IV smile scaled by India VIX): fine for "
-    "ranking settings, not a promise of rupees.",
     "Signals the history can't show are switched off (see backtest_overrides), e.g. the CE/PE premium skew.",
     "Today's NIFTY 50 list and weights on every day (survivorship); stocks Kite no longer lists are missing.",
     "Fills at the modelled touch plus the paper slippage; no queueing, partial fills or latency.",
@@ -89,8 +91,9 @@ def summarize(db: Database, meta: dict[str, Any], coverage: dict[str, dict[str, 
                       expiry_from_bhavcopy=sum(1 for c in coverage.values() if c.get("expiry") == "bhavcopy"),
                       stocks_min=min(stocks_seen) if stocks_seen else 0,
                       stocks_max=max(stocks_seen) if stocks_seen else 0,
-                      missing_index=[d for d, c in coverage.items() if c.get("missing")]),
-        limits=LIMITS,
+                      missing_index=[d for d, c in coverage.items() if c.get("missing") == "index"],
+                      missing_options=[d for d, c in coverage.items() if c.get("missing") == "options"]),
+        limits=[REAL_LIMIT if meta.get("option_prices") == "real" else MODEL_LIMIT, *LIMITS],
     )
 
 
@@ -118,6 +121,9 @@ def print_summary(summary: dict[str, Any], out=print) -> None:
                                       for k, v in summary[key].items()))
     if summary["skips"]:
         out("  Days without a trade: " + "; ".join(f"{k} ×{n}" for k, n in list(summary["skips"].items())[:5]))
+    if meta.get("option_prices") == "real":
+        out(f"  Option prices: real candles. Days without the nearest expiry, not traded: "
+            f"{', '.join(cov['missing_options']) or 'none'}")
     out(f"  Data: {cov['days']} days; futures {cov['with_futures']}, VIX {cov['with_vix']}, IV smile "
         f"{cov['with_smile']}, expiry from bhavcopy {cov['expiry_from_bhavcopy']}, stocks {cov['stocks_min']}-"
         f"{cov['stocks_max']}")

@@ -85,6 +85,56 @@ with the queries it already has.
 
 A year takes several minutes: each day runs the full minute-by-minute loop.
 
+## 5a. Real option prices (from 4 Nov 2026)
+
+Modelled prices are too rough for option sellers, and Kite serves no expired options. So real
+1-minute option candles are now collected every evening and backtests can run on them.
+
+**Collecting: `algo data options`.** Run it in the evening, after any `algo login` that day.
+
+| Step | What it does |
+|---|---|
+| 1 | NIFTY 50 and India VIX, 1-minute |
+| 2 | Every listed strike of the nearest 3 expiries (`marketdata.option_expiries`), 1-minute with OI, into `options_1m` (source `kite`) |
+| 3 | The near-month future and the 50 stocks, 1-minute, so every strategy can be replayed |
+| 4 | Prints what is stored per expiry, and the next deadline |
+
+- **Missed days come back.** A live contract keeps its whole history, so one run fetches every day
+  not stored yet (up to `marketdata.option_lookback_days`, 59 by default). Kite's limit is 60 days
+  per request.
+- **The deadline is each expiry's evening.** Measured: the 3 Nov contracts downloaded on the evening
+  of 3 Nov, and returned `invalid token` the next day. A week not saved by then is lost.
+- **Only finished sessions are stored.** Before 15:35 the command stops at the previous trading day,
+  so a half-day is never saved as complete.
+- **A contract that fails to download marks that day `PARTIAL`,** and the next run fetches it again.
+- **Bookkeeping:** one file per day holds every expiry. The manifest has one row per expiry and day,
+  under the key `NIFTY:2026-11-09`.
+- `algo login` prints a reminder on expiry day, or when finished days are still not stored.
+
+**Using them: `algo backtest --options real`.**
+
+```bash
+.venv/Scripts/algo backtest --algo iron_condor_balanced --from 2026-10-28 --options real
+```
+
+| Piece | With `--options real` |
+|---|---|
+| Option quotes | The close of the contract's last **finished** minute, so no look-ahead. No candle yet = no quote |
+| Bid/ask | Close ± half the spread measured in the recorded ticks: 0.025 pt under ₹5, 0.05 under ₹40, 0.10 under ₹100, 0.50 above. The paper broker adds its 0.1-pt slippage |
+| OI | From the candles, so PCR is real |
+| Expiry and strikes | The nearest expiry in that day's candles |
+| Holidays | The real list, so DTE is right when a holiday falls before the expiry |
+| A day whose nearest expiry was never saved | **Not traded.** It is listed under `missing_options` in the summary, never run on the wrong contract |
+
+The default stays `--options model`, so older results still compare.
+
+**Limits of real candles:**
+- 1-minute closes, not ticks. A stop between two closes fires at the next close.
+- The spread is a model. It agreed with the recorded ticks to about 0.05 pt on OTM strikes on one
+  morning, but it can be wrong in a fast market.
+- A minute with no trade has no candle, so the last close stands. Far strikes can look stale.
+- The directional scalp's `BACKTEST_OVERRIDES` still switch its premium skew off, even on real prices.
+
 ## 6. Dashboard plan (not built)
 
 Sidebar **Research → Backtests** (now "Soon").

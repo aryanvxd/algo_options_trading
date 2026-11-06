@@ -22,6 +22,7 @@ from trading_core.backtest.summary import summarize
 from trading_core.clock import SimClock, ist
 from trading_core.config import PlatformConfig, deep_merge, load_universe
 from trading_core.db.engine import Database
+from trading_core.db.migrate import holidays, seed_holidays
 from trading_core.db.repo import Journal
 from trading_core.kite.instruments import InstrumentStore
 from trading_core.market.calendar import MarketCalendar
@@ -57,7 +58,9 @@ def default_name(algo_id: str, start: date, end: date) -> str:
 
 def run_backtest(platform: PlatformConfig, algo_id: str, start: date, end: date, *,
                  overrides: dict[str, Any] | None = None, name: str | None = None, lot_size: int = 65,
-                 progress: Callable[[str], None] = print, history: History | None = None) -> Path:
+                 progress: Callable[[str], None] = print, history: History | None = None,
+                 option_prices: str = "model") -> Path:
+    real = option_prices == "real"
     name = name or default_name(algo_id, start, end)
     folder = platform.data_dir / "backtests" / name
     if (folder / "backtest.db").exists():
@@ -72,13 +75,17 @@ def run_backtest(platform: PlatformConfig, algo_id: str, start: date, end: date,
     trading = history.trading_days(lookback, end)
     days = [d for d in trading if start <= d <= end]
     weekdays = [lookback + timedelta(days=i) for i in range((end - lookback).days + 1)]
-    calendar = MarketCalendar([d for d in weekdays if d.weekday() < 5 and d not in set(trading)])
+    closed = [d for d in weekdays if d.weekday() < 5 and d not in set(trading)]
+    if real:                                    # expiries lie past the data: DTE needs the real holidays
+        seed_holidays(db, bt)
+        closed += holidays(db)
+    calendar = MarketCalendar(closed)
     effective = deep_merge(backtest_overrides(algo_id), overrides or {})
     _, cfg = registry.load(algo_id, effective)                  # fail fast on a bad --set
     symbols = [k.split(":", 1)[1] for k in load_universe(platform, "nifty50")]
 
     meta = dict(name=name, algo_id=algo_id, version=cfg.version, start=str(start), end=str(end), days=len(days),
-                lot_size=lot_size, overrides=overrides or {}, backtest_overrides=backtest_overrides(algo_id),
+                option_prices=option_prices, lot_size=lot_size, overrides=overrides or {}, backtest_overrides=backtest_overrides(algo_id),
                 started_at=datetime.now().astimezone().isoformat(timespec="seconds"))
     _status(folder, meta, "running", 0)
     if not days:
@@ -94,9 +101,12 @@ def run_backtest(platform: PlatformConfig, algo_id: str, start: date, end: date,
     try:
         for n, d in enumerate(days, start=1):
             prev = max((x for x in trading if x < d), default=None)
-            data = history.load(d, prev, symbols, set(trading))
+            data = history.load(d, prev, symbols, set(trading), real=real)
             if data is None:
                 coverage[str(d)] = dict(missing="index")
+                continue
+            if real and data.real is None:
+                coverage[str(d)] = dict(missing="options")
                 continue
             coverage[str(d)] = data.coverage()
             clock = SimClock(ist(d, REPLAY_START))
@@ -138,17 +148,21 @@ def _prepare_day(db: Database, bt: PlatformConfig, data: DayData, clock: SimCloc
         rows.append(_row(tok, sym, sym, "NSE", "NSE", "EQ"))
         bars[tok] = b
         closes[tok] = (sym, data.prev_closes[sym])
-    options = {}
+    options, real = {}, {}
     for i, k in enumerate(data.strikes):
         for j, opt in enumerate(("CE", "PE")):
             tok = OPTION_TOKEN_BASE + i * 2 + j
+            if data.real is not None:
+                if (k, opt) not in data.real:   # never traded that day: as if not listed
+                    continue
+                real[tok] = data.real[(k, opt)]
             rows.append(_row(tok, f"NIFTY{data.expiry:%y%m%d}{int(k)}{opt}", "NIFTY", "NFO", "NFO-OPT", opt,
                              strike=k, expiry=data.expiry, lot_size=lot_size))
             options[tok] = OptionSpec(k, opt, data.expiry)
     InstrumentStore(db, bt.instruments).save_snapshot(d, rows)
     Journal(db).save_prev_closes(d, closes, ist(d, REPLAY_START), source="backtest")
     return BacktestFeed(data, clock, bars, options, INDEX_TOKEN, VIX_TOKEN, bt.marketdata.risk_free_rate,
-                        no_wicks=[tok for tok, _ in closes.items()])
+                        no_wicks=[tok for tok, _ in closes.items()], real=real if data.real is not None else None)
 
 
 def _row(token: int, symbol: str, name: str, exchange: str, segment: str, itype: str, strike: float = 0,
