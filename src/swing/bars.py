@@ -13,7 +13,6 @@ from typing import Iterable
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from trading_core.marketdata.store import MarketStore, conform, slug
@@ -54,9 +53,8 @@ def daily_bars(store: MarketStore, universe: str, symbols: Iterable[str] | None 
     files = sorted(base.glob(f"year=*/part-{slug(source)}.parquet"))
     if not files:
         return {}
-    table = pa.concat_tables([conform(pq.read_table(p), ds.schema) for p in files])
-    if symbols is not None:
-        table = table.filter(pc.is_in(table["symbol"], pa.array(list(symbols), type=pa.string())))
+    wanted = [("symbol", "in", list(symbols))] if symbols is not None else None
+    table = pa.concat_tables([conform(pq.read_table(p, filters=wanted), ds.schema) for p in files])
     by_sym: dict[str, list[tuple]] = defaultdict(list)
     cols = [table[c].to_pylist() for c in ("symbol", "trade_date", "open", "high", "low", "close", "volume")]
     for sym, *rest in zip(*cols):

@@ -239,7 +239,7 @@ def _flipped(z: Zone) -> bool:
     return False
 
 
-def _volume_profile(b: Bars, atr: float) -> tuple[np.ndarray, np.ndarray] | None:
+def volume_profile(b: Bars, atr: float) -> tuple[np.ndarray, np.ndarray] | None:
     """Z7: each day's volume spread evenly over its range, in bins of 0.1 ATR."""
     if not b.volume.any():
         return None                                      # indices have no volume
@@ -316,7 +316,7 @@ def find_zones(full: Bars, cfg: ZoneConfig, asof: date | None = None) -> ZoneRep
             mid = (lo + hi) / 2
             lo, hi = mid - cfg.min_width_atr * atr_now / 2, mid + cfg.min_width_atr * atr_now / 2
         zones.append(Zone(round(lo, 2), round(hi, 2), sorted(g, key=lambda p: p.day)))
-    profile = _volume_profile(win, atr_now)
+    profile = volume_profile(win, atr_now)
     if profile is not None:
         edges, vol = profile
         mean_density = vol.sum() / (edges[-1] - edges[0])

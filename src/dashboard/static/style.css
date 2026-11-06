@@ -380,3 +380,37 @@ details.spec summary { cursor: pointer; font-size: 0.86rem; display: flex; gap: 
   .cal-values { grid-column: 1 / -1; }
   .day-row .algo-chips { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* ── Swing review ─────────────────────────────────────────────────────── */
+.sw-note { display: flex; gap: 8px; align-items: baseline; color: var(--muted); font-size: 0.78rem; margin-bottom: 12px; }
+.sw-note i { color: var(--faint); }
+.sw-gap { margin-bottom: 10px; }
+.sw-sup { color: var(--accent-dark); font-weight: 600; }
+.sw-res { color: #dc2626; font-weight: 600; }
+.sw-flip { color: #b45309; font-weight: 600; }
+.data-table th.sw-left, .data-table td.sw-left { text-align: left; }
+.sw-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.sw-sort:hover { color: var(--text); }
+.data-table tr.sw-on td { background: var(--accent-soft); }
+.data-table td a { color: var(--text-strong); font-weight: 600; text-decoration: none; }
+.data-table td a:hover { color: var(--accent-dark); text-decoration: underline; }
+.sw-spark { width: 72px; height: 22px; display: block; }
+.sw-spark polyline { fill: none; stroke-width: 1.2; }
+.sw-back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.78rem; text-decoration: none; margin-bottom: 4px; }
+.sw-back:hover { color: var(--accent-dark); }
+.sw-price { text-align: right; font-size: 0.78rem; color: var(--muted); }
+.sw-close { font-size: 1.4rem; font-weight: 700; color: var(--text-strong); }
+.sw-active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.sw-check { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--muted); cursor: pointer; }
+.sw-key { display: inline-flex; align-items: center; gap: 5px; font-size: 0.74rem; color: var(--muted); }
+.sw-sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-left: 6px; }
+.sw-bg-sup { background: rgba(16, 185, 129, 0.3); }
+.sw-bg-res { background: rgba(239, 68, 68, 0.3); }
+.sw-bg-flip { background: rgba(245, 158, 11, 0.35); }
+.sw-bg-in { background: rgba(59, 130, 246, 0.3); }
+.sw-legend { font-size: 0.76rem; color: var(--muted); min-height: 1.2em; margin: 6px 0; white-space: pre; }
+.sw-chart { height: min(62vh, 560px); min-height: 320px; }
+.sw-z-support { color: var(--accent-dark); font-weight: 600; }
+.sw-z-resistance { color: #dc2626; font-weight: 600; }
+.sw-z-flipped { color: #b45309; font-weight: 600; }
+.sw-z-inside { color: var(--info); font-weight: 600; }

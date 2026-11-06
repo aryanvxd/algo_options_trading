@@ -277,7 +277,7 @@ Sidebar **Swing**, with these pages:
 | Page | Shows |
 |---|---|
 | **Sectors** | every sector index with its zones: near support, mid-range or near resistance, and distance in ATRs. A small chart per index. Click through to the index's stocks. This is the industry overview |
-| **Stock page** (`#/swing/POWERGRID`) | **candlestick chart**, daily ↔ weekly, with the zones as shaded bands (support green, resistance red, flipped amber), pivots marked, volume bars and a volume-at-price histogram on the side. Zone table: range, score, touches, last test, role history |
+| **Stock page** (`#/swing/POWERGRID`, indices too) | **candlestick chart**, daily ↔ weekly, with the zones as shaded bands (support green, resistance red, flipped amber, blue when price is inside), pivots marked, volume bars and a volume-at-price histogram on the side. Zone table: range, role, holds each way, pivots, last test, last break, confluence. **No scores**: they add nothing (9a) |
 | **Holdings review** | every stock you hold (read from Kite, read-only) through the same zone engine: nearest support and resistance, whether price is above or below all its supports, and how far it is from your average price in ATRs. Information for your decisions, not recommendations |
 | **Fundamentals** | the main numbers for a stock you are looking at, on one page. What it shows and where the data comes from are open (section 11): Kite has no fundamentals |
 | **Backtests** | the section 9 results, so the "no edge" finding stays next to the charts |
@@ -286,12 +286,16 @@ Every page carries the same note: zones show past turning points; in the backtes
 more often than random levels.
 
 **Charts:**
-- Candlesticks need a library. [Lightweight Charts](https://github.com/tradingview/lightweight-charts)
-  (TradingView, Apache 2.0) is small and built for this, and is vendored like Chart.js, so the page
-  works offline.
+- Candlesticks use [Lightweight Charts](https://github.com/tradingview/lightweight-charts) 4.2.3
+  (TradingView, Apache 2.0), vendored like Chart.js in `static/vendor/lightweight-charts/`, so the
+  page works offline. Its licence asks for the attribution logo on the chart, so it stays.
+- It has no price bands, so a small drawing plugin in `pages/swing.js` paints the zones and the
+  volume at price behind the candles.
 - Chart.js stays for the rest.
-- A first version of the zone chart is the POWERGRID picture above, with daily closes and shaded
-  zones.
+
+**How the pages get their data:** the Sectors page reads `data/reports/swing/overview.json`, written
+by `algo swing scan`; the Stock page runs the zone engine on one symbol's stored candles when it
+opens (`src/dashboard/swing_queries.py`). Neither talks to Kite.
 
 ## 9. Testing the idea before money
 
@@ -406,12 +410,12 @@ stocks. **You decided on 6 Nov 2026 to keep it as a review tool** (top of this f
 | W3 | Zone backtest, `algo swing backtest`: no edge (9a) |
 | W4 | Setup rules and setup backtest, `algo swing backtest setups`: no edge (9b) |
 | R1 | `algo swing scan`: refresh candles, then write the **overview** to `data/reports/swing/overview.html`: sectors first, then liquid stocks with their distance to the nearest zones, each linked to its chart in the same folder. "Near" = within 1 ATR. No scores, no database tables. `--no-refresh` skips Kite. A scan rewrites every chart, so one made with `algo swing chart --mark` loses its line |
+| R2 | Dashboard: a **Swing** sidebar entry with the Sectors and Stock pages (section 8), candlesticks from vendored Lightweight Charts |
 
 **Next, for the review tool:**
 
 | Step | What |
 |---|---|
-| R2 | Dashboard: Sectors and Stock pages (section 8), with candlesticks from vendored Lightweight Charts. Touches shared dashboard files, so it comes after this branch is merged |
 | R3 | Holdings review: your Kite holdings through the zone engine, read-only |
 | R4 | Fundamentals page, once its data source is settled |
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import date, timedelta
 
 from trading_core.config import PlatformConfig
@@ -101,10 +102,11 @@ def _scan(args, cfg, platform: PlatformConfig) -> int:
         return out
 
     indices, stocks = rows(index_bars), rows(wanted)
-    page = overview.render(u, indices, stocks, traded, cfg.overview_near_atr, cfg.min_traded_value_cr,
-                           len(u.symbols) - len(stocks))
+    args_ = (u, indices, stocks, traded, cfg.overview_near_atr, cfg.min_traded_value_cr, len(u.symbols) - len(stocks))
     path = folder / "overview.html"
-    path.write_text(page, encoding="utf-8")
+    path.write_text(overview.render(*args_), encoding="utf-8")
+    sparks = {s: [round(float(c), 2) for c in b.close[-60:]] for s, b in index_bars.items()}
+    (folder / "overview.json").write_text(json.dumps(overview.payload(*args_, sparks)), encoding="utf-8")
     print(f"{len(indices)} indices, {len(stocks)} of {len(u.symbols)} stocks, candles to {latest} -> {path}")
     return 0
 

@@ -76,22 +76,52 @@ def _name(symbol: str, linked: bool) -> str:
     return f'<a href="{slug(symbol)}.html">{text}</a>' if linked else text
 
 
+def _member_counts(u: SwingUniverse, index: str, by_sym: dict[str, Row]) -> tuple[int, int, int]:
+    """An index's liquid stocks: how many, how many near support, how many near resistance."""
+    members = [by_sym[s] for s in u.index(index).members if s in by_sym]
+    return (len(members), sum(m.position == NEAR_SUPPORT for m in members),
+            sum(m.position == NEAR_RESISTANCE for m in members))
+
+
+def _row_dict(r: Row) -> dict:
+    zone = lambda z: [z.lo, z.hi] if z else None  # noqa: E731
+    return {"symbol": r.symbol, "close": r.close, "week_pct": r.week_pct, "month_pct": r.month_pct,
+            "position": r.position, "support": zone(r.support), "support_atr": r.support_atr,
+            "resistance": zone(r.resistance), "resistance_atr": r.resistance_atr}
+
+
+def payload(u: SwingUniverse, indices: list[Row], stocks: list[Row], traded: dict[str, float], near_atr: float,
+            min_traded_value_cr: float, left_out: int, sparks: dict[str, list[float]]) -> dict:
+    """What the dashboard's Sectors page shows (overview.json, written by ``algo swing scan``)."""
+    by_sym = {r.symbol: r for r in stocks}
+    kinds = {ix.name: ix.kind for ix in u.indices}
+    sectors = []
+    for r in sorted(indices, key=lambda r: (kinds.get(r.symbol, ""), r.symbol)):
+        n, n_sup, n_res = _member_counts(u, r.symbol, by_sym)
+        sectors.append({**_row_dict(r), "kind": kinds.get(r.symbol, ""), "stocks": n, "near_support": n_sup,
+                        "near_resistance": n_res, "spark": sparks.get(r.symbol, [])})
+    rows = [{**_row_dict(r), "industry": u.industry.get(r.symbol, ""), "indices": u.indices_of(r.symbol),
+             "traded_cr": round(traded.get(r.symbol, 0.0), 1)} for r in sorted(stocks, key=lambda r: r.symbol)]
+    day = max((r.day for r in indices + stocks), default=None)
+    return {"available": True, "candles_to": day.isoformat() if day else None, "near_atr": near_atr,
+            "min_traded_value_cr": min_traded_value_cr, "left_out": left_out, "note": NOTE,
+            "sectors": sectors, "stocks": rows}
+
+
 def render(u: SwingUniverse, indices: list[Row], stocks: list[Row], traded: dict[str, float], near_atr: float,
            min_traded_value_cr: float, left_out: int) -> str:
     by_sym = {r.symbol: r for r in stocks}
     kinds = {ix.name: ix.kind for ix in u.indices}
     sector_rows = []
     for r in sorted(indices, key=lambda r: (kinds.get(r.symbol, ""), r.symbol)):
-        members = [by_sym[s] for s in u.index(r.symbol).members if s in by_sym]
-        n_sup = sum(m.position == NEAR_SUPPORT for m in members)
-        n_res = sum(m.position == NEAR_RESISTANCE for m in members)
+        n_members, n_sup, n_res = _member_counts(u, r.symbol, by_sym)
         sector_rows.append(
             f'<tr data-index="{html.escape(r.symbol)}"><td>{_name(r.symbol, r.position != NO_ZONES)}</td>'
             f'<td>{kinds.get(r.symbol, "")}</td><td data-v="{r.close}">{r.close:,.2f}</td>'
             f'{_pct(r.week_pct) or "<td></td>"}{_pct(r.month_pct) or "<td></td>"}'
             f'<td class="{_pos_class(r.position)}">{r.position}</td>'
             f'{_zone_cells(r.support, r.support_atr)}{_zone_cells(r.resistance, r.resistance_atr)}'
-            f'<td data-v="{len(members)}">{len(members)}</td><td data-v="{n_sup}">{n_sup}</td>'
+            f'<td data-v="{n_members}">{n_members}</td><td data-v="{n_sup}">{n_sup}</td>'
             f'<td data-v="{n_res}">{n_res}</td></tr>')
     stock_rows = []
     for r in sorted(stocks, key=lambda r: r.symbol):

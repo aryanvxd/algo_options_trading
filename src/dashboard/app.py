@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from dashboard import calendar_queries, control, queries
+from dashboard import calendar_queries, control, queries, swing_queries
 from dashboard import strategy_queries as sq
 from trading_core import __version__
 from trading_core.clock import Clock, LiveClock
@@ -186,6 +186,18 @@ def create_app(db: Database, clock: Clock | None = None, platform: PlatformConfi
     @app.post("/api/kite/login")
     def api_login():
         return control.login(platform, launcher)
+
+    # Swing review: the last `algo swing scan`, and one stock's chart and zones. Read-only.
+    @app.get("/api/swing/overview")
+    def api_swing_overview():
+        return swing_queries.overview(platform)
+
+    @app.get("/api/swing/stock/{symbol}")
+    def api_swing_stock(symbol: str):
+        out = swing_queries.stock(platform, symbol)
+        if out is None:
+            raise HTTPException(404, f"no candles for {symbol!r}: run `algo swing scan`")
+        return out
 
     def _known(algo_id: str) -> str:
         if algo_id not in {a["algo_id"] for a in sq.strategy_list(db)}:
