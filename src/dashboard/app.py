@@ -192,6 +192,10 @@ def create_app(db: Database, clock: Clock | None = None, platform: PlatformConfi
     def api_swing_overview():
         return swing_queries.overview(platform)
 
+    @app.get("/api/swing/holdings")
+    def api_swing_holdings():
+        return swing_queries.holdings(platform)
+
     @app.get("/api/swing/stock/{symbol}")
     def api_swing_stock(symbol: str):
         out = swing_queries.stock(platform, symbol)

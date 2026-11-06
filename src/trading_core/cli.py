@@ -29,6 +29,7 @@
   algo swing zones POWERGRID [--asof ...] [--pivots]   weekend S/R swing: support/resistance zones
   algo swing chart POWERGRID [--mark 249.60]           weekend S/R swing: HTML chart in data/reports/swing
   algo swing scan [--no-refresh]       weekend S/R swing: refresh candles, write the overview and charts
+  algo swing holdings                  weekend S/R swing: read your Kite holdings (read-only), write the review
   algo swing backtest [zones|setups]   weekend S/R swing: do zones hold; do setups beat random entries
 """
 

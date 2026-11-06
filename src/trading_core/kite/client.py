@@ -77,6 +77,10 @@ class KiteClient:
     def margins(self) -> dict[str, Any]:
         return self._call(self.kite.margins)
 
+    def holdings(self) -> list[dict[str, Any]]:
+        """The account's delivery holdings. Read-only."""
+        return self._call(self.kite.holdings) or []
+
     def basket_margin(self, orders: list[dict[str, Any]]) -> float | None:
         """Margin Kite would block for these orders together (hedge benefit included), ignoring the
         account's real positions. Read-only: nothing is placed."""

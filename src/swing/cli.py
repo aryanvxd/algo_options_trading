@@ -35,6 +35,7 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     c.add_argument("--mark-label", default="entry")
     sc = ssub.add_parser("scan", help="refresh candles and write the overview and charts (data/reports/swing)")
     sc.add_argument("--no-refresh", action="store_true", help="use the candles already stored (no Kite login)")
+    ssub.add_parser("holdings", help="read your Kite holdings (read-only) and write the holdings review")
     bt = ssub.add_parser("backtest", help="zones: do zones hold (default); setups: do the setups pay "
                                           "(data/backtests/swing_<what>_*)")
     bt.add_argument("what", nargs="?", choices=["zones", "setups"], default="zones")
@@ -64,7 +65,39 @@ def cmd_swing(args: argparse.Namespace, platform: PlatformConfig) -> int:
         return _backtest(args, cfg, platform)
     if args.action == "scan":
         return _scan(args, cfg, platform)
+    if args.action == "holdings":
+        return _holdings(cfg, platform)
     return 1
+
+
+def _holdings(cfg, platform: PlatformConfig) -> int:
+    """Read-only: kite.holdings() and candles. Held symbols aren't printed (personal data)."""
+    from swing import holdings
+    from swing.bars import daily_bars
+    from swing.universe import load_swing_universe
+    from trading_core.clock import LiveClock
+    from trading_core.config import load_secrets
+    from trading_core.db.engine import Database
+    from trading_core.kite.client import KiteClient
+    from trading_core.marketdata.manifest import Manifest
+    from trading_core.marketdata.sources.kite_index import KiteHistory
+    from trading_core.marketdata.store import MarketStore
+
+    clock = LiveClock()
+    db = Database(platform.db_url)
+    client = KiteClient.from_db(db, platform.kite, load_secrets(platform.root), clock)
+    held = holdings.parse(client.holdings())
+    store = MarketStore(platform.marketdata.dir)
+    symbols = [h.symbol for h in held]
+    if symbols:
+        end = clock.today()
+        kh = KiteHistory(client, store, Manifest(db), progress=lambda _: None)
+        kh.equity_daily(cfg.holdings_universe, symbols, end - timedelta(days=cfg.zones.lookback_days + 365), end)
+    bars = daily_bars(store, cfg.holdings_universe, symbols) if symbols else {}
+    data = holdings.review(held, bars, cfg.zones, cfg.overview_near_atr, load_swing_universe(platform, cfg.universe),
+                           clock.now())
+    print(f"{len(held)} holdings, {len(bars)} with candles -> {holdings.write(platform, data)}")
+    return 0
 
 
 def _scan(args, cfg, platform: PlatformConfig) -> int:
@@ -81,6 +114,7 @@ def _scan(args, cfg, platform: PlatformConfig) -> int:
         last = max((b.dates[-1] for b in stored.values()), default=None)
         start = (last - timedelta(days=5)).isoformat() if last else None
         _data(argparse.Namespace(start=start, end=None, indices_only=False), cfg, platform)
+        _holdings(cfg, platform)
     u = load_swing_universe(platform, cfg.universe)
     index_bars = daily_bars(store, cfg.index_universe)
     stock_bars = daily_bars(store, cfg.universe)

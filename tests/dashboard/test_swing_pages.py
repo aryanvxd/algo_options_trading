@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dashboard.app import create_app
+from swing.holdings import write
 from tests.swing.test_zones import saw
 from trading_core.marketdata.store import MarketStore
 
@@ -58,6 +59,16 @@ def test_index_has_no_volume_profile(client, platform):
 def test_unknown_or_missing_symbol_is_404(client):
     assert client.get("/api/swing/stock/NOTASTOCK").status_code == 404
     assert client.get("/api/swing/stock/POWERGRID").status_code == 404          # in the universe, no candles
+
+
+def test_holdings_page_and_held_stock(client, platform):
+    assert client.get("/api/swing/holdings").json()["available"] is False
+    seed(platform, "OUTSIDE", "swing_holdings")
+    assert client.get("/api/swing/stock/OUTSIDE").status_code == 404            # not held, not in the universe
+    write(platform, {"available": True, "rows": [{"symbol": "OUTSIDE", "quantity": 25, "average": 104.0}]})
+    assert client.get("/api/swing/holdings").json()["rows"][0]["quantity"] == 25
+    s = client.get("/api/swing/stock/OUTSIDE").json()
+    assert s["held"] == {"quantity": 25, "average": 104.0} and s["zones"] and s["indices"] == []
 
 
 def test_page_is_wired_in(client):

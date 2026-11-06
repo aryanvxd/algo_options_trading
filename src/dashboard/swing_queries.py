@@ -1,7 +1,8 @@
 """Read-side queries for the Swing pages (spec weekend-sr-swing.md, section 8).
 
 Nothing here talks to Kite. The Sectors page reads the overview.json that ``algo swing scan``
-wrote; the Stock page runs the zone engine on one symbol's stored candles when it is opened.
+wrote, the Holdings page the holdings.json that ``algo swing holdings`` wrote; the Stock page runs
+the zone engine on one symbol's stored candles when it is opened.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import Any
 
 from swing.bars import Bars, avg_traded_value_cr, daily_bars, weekly
 from swing.chart import NOTE
+from swing.holdings import load as load_holdings
 from swing.overview import row_for
 from swing.settings import load_swing_config
 from swing.universe import load_swing_universe
@@ -59,18 +61,27 @@ def _profile(b: Bars, atr: float) -> list[dict[str, float]]:
     return out
 
 
+def holdings(platform: PlatformConfig) -> dict[str, Any]:
+    return load_holdings(platform)
+
+
 def stock(platform: PlatformConfig, symbol: str) -> dict[str, Any] | None:
-    """Candles, zones and volume at price of a stock or index in the universe; None if it isn't one."""
+    """Candles, zones and volume at price of a stock or index in the universe, or of a holding;
+    None if it is neither."""
     cfg = load_swing_config()
     try:
         u = load_swing_universe(platform, cfg.universe)
     except ValueError:
         return None
+    held = next((r for r in load_holdings(platform)["rows"] if r["symbol"] == symbol), None)
     is_index = any(ix.name == symbol for ix in u.indices)
-    if not is_index and symbol not in u.industry:
+    if not is_index and symbol not in u.industry and held is None:
         return None
+    store = MarketStore(platform.marketdata.dir)
     key = cfg.index_universe if is_index else cfg.universe
-    bars = daily_bars(MarketStore(platform.marketdata.dir), key, [symbol]).get(symbol)
+    bars = daily_bars(store, key, [symbol]).get(symbol)
+    if bars is None and held is not None:                    # a holding outside the universe
+        bars = daily_bars(store, cfg.holdings_universe, [symbol]).get(symbol)
     if bars is None:
         return None
     rep = find_zones(bars, cfg.zones)
@@ -83,6 +94,7 @@ def stock(platform: PlatformConfig, symbol: str) -> dict[str, Any] | None:
             "candles_to": rep.asof.isoformat(), "close": rep.close, "atr": rep.atr,
             "week_pct": row.week_pct if row else None, "month_pct": row.month_pct if row else None,
             "position": row.position if row else None, "traded_cr": None if is_index else round(avg_traded_value_cr(bars), 1),
+            "held": {"quantity": held["quantity"], "average": held["average"]} if held else None,
             "note": NOTE, "zones_note": rep.note, "daily": _candles(shown), "weekly": _candles(wk),
             "zones": [_zone(z, wk.dates) for z in sorted(rep.zones, key=lambda z: -z.hi)],
             "profile": _profile(shown, rep.atr) if rep.atr else []}

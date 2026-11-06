@@ -278,7 +278,7 @@ Sidebar **Swing**, with these pages:
 |---|---|
 | **Sectors** | every sector index with its zones: near support, mid-range or near resistance, and distance in ATRs. A small chart per index. Click through to the index's stocks. This is the industry overview |
 | **Stock page** (`#/swing/POWERGRID`, indices too) | **candlestick chart**, daily ↔ weekly, with the zones as shaded bands (support green, resistance red, flipped amber, blue when price is inside), pivots marked, volume bars and a volume-at-price histogram on the side. Zone table: range, role, holds each way, pivots, last test, last break, confluence. **No scores**: they add nothing (9a) |
-| **Holdings review** | every stock you hold (read from Kite, read-only) through the same zone engine: nearest support and resistance, whether price is above or below all its supports, and how far it is from your average price in ATRs. Information for your decisions, not recommendations |
+| **Holdings** (`#/swing/holdings`) | every stock you hold (read from Kite, read-only) through the same zone engine: nearest support and resistance, whether any support is left below the price, whether your average sits inside a zone, and how far the price is from your average in ATRs. A held stock's chart shows your average as a line. Information for your decisions, not recommendations |
 | **Fundamentals** | the main numbers for a stock you are looking at, on one page. What it shows and where the data comes from are open (section 11): Kite has no fundamentals |
 | **Backtests** | the section 9 results, so the "no edge" finding stays next to the charts |
 
@@ -296,6 +296,13 @@ more often than random levels.
 **How the pages get their data:** the Sectors page reads `data/reports/swing/overview.json`, written
 by `algo swing scan`; the Stock page runs the zone engine on one symbol's stored candles when it
 opens (`src/dashboard/swing_queries.py`). Neither talks to Kite.
+
+**Holdings** come from `algo swing holdings`, which `algo swing scan` also runs: it reads
+`kite.holdings()`, downloads about three years of candles for those stocks (key `swing_holdings`,
+so stocks outside the universe work too) and writes `data/reports/swing/holdings.json`. The
+dashboard only reads that file. Your holdings are personal data: they stay in the git-ignored
+`data/` folder and on this local dashboard, never in code, docs or tests. Quantity = settled +
+T+1 + pledged shares.
 
 ## 9. Testing the idea before money
 
@@ -411,12 +418,12 @@ stocks. **You decided on 6 Nov 2026 to keep it as a review tool** (top of this f
 | W4 | Setup rules and setup backtest, `algo swing backtest setups`: no edge (9b) |
 | R1 | `algo swing scan`: refresh candles, then write the **overview** to `data/reports/swing/overview.html`: sectors first, then liquid stocks with their distance to the nearest zones, each linked to its chart in the same folder. "Near" = within 1 ATR. No scores, no database tables. `--no-refresh` skips Kite. A scan rewrites every chart, so one made with `algo swing chart --mark` loses its line |
 | R2 | Dashboard: a **Swing** sidebar entry with the Sectors and Stock pages (section 8), candlesticks from vendored Lightweight Charts |
+| R3 | Holdings: `algo swing holdings` (also run by the scan) and the Holdings tab; your average as a line on a held stock's chart. Read-only. Quantities checked against Kite's own P&L on 6 Nov 2026 (T+1 and pledged shares not yet seen in real data) |
 
 **Next, for the review tool:**
 
 | Step | What |
 |---|---|
-| R3 | Holdings review: your Kite holdings through the zone engine, read-only |
 | R4 | Fundamentals page, once its data source is settled |
 
 **Dropped:** the weekend approval report, trades and alerts pages, Kite alerts/ATOs/GTTs (old W6),

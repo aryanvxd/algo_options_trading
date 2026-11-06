@@ -1,6 +1,7 @@
-/* Swing review: #/swing (sectors, then their stocks) and #/swing/<SYMBOL> (chart and zones).
-   Information for your own decisions: it makes no setups and sends nothing to Kite. The list comes
-   from the last `algo swing scan`; a stock's zones are computed when its page opens. */
+/* Swing review: #/swing (sectors, then their stocks), #/swing/holdings (your holdings against
+   their zones) and #/swing/<SYMBOL> (chart and zones). Information for your own decisions: it makes
+   no setups and sends nothing to Kite. The lists come from the last `algo swing scan`; a stock's
+   zones are computed when its page opens. */
 
 (() => {
   const POSITIONS = ['near support', 'near resistance', 'in a zone', 'mid-range'];
@@ -8,9 +9,15 @@
   const ZONE_RGB = { support: '16, 185, 129', resistance: '239, 68, 68', flipped: '245, 158, 11', inside: '59, 130, 246' };
 
   // Kept between pages, so coming back from a chart keeps the filters and the sort.
-  const list = { index: '', position: '', q: '', sectorSort: null, stockSort: null };
+  const list = { index: '', position: '', q: '', sectorSort: null, stockSort: null, heldSort: null };
   let chart = null;
   let data = null;
+  let held = null;
+
+  const tabs = (active) => `<nav class="tabs" aria-label="Swing sections">
+    <a class="tab${active === 'list' ? ' active' : ''}" href="#/swing"><i class="fa-solid fa-layer-group"></i>Sectors and stocks</a>
+    <a class="tab${active === 'holdings' ? ' active' : ''}" href="#/swing/holdings"><i class="fa-solid fa-briefcase"></i>Holdings</a>
+  </nav>`;
 
   const position = (p) => `<span class="${POS_CLASS[p] || 'muted'}">${App.esc(p)}</span>`;
   const atr = (v) => (v === null || v === undefined ? '—' : v.toFixed(1));
@@ -122,6 +129,7 @@
           <div class="page-subtitle">Where each sector and stock sits against its support and resistance zones</div></div>
         <div class="header-meta">Candles to ${App.prettyDate(data.candles_to)}</div>
       </div>
+      ${tabs('list')}
       <p class="sw-note"><i class="fa-solid fa-circle-info"></i>${App.esc(data.note)}</p>
       <div class="kpi-strip">
         ${App.kpi('Sectors near support', count(data.sectors, 'near support'), '', 'fa-arrow-down', 'tone-green', `of ${data.sectors.length} indices`)}
@@ -153,6 +161,64 @@
     el.querySelector('#sw-index').addEventListener('change', (e) => { list.index = e.target.value; drawSectors(); drawStocks(); });
     el.querySelector('#sw-position').addEventListener('change', (e) => { list.position = e.target.value; drawStocks(); });
     el.querySelector('#sw-find').addEventListener('input', (e) => { list.q = e.target.value; drawStocks(); });
+  }
+
+  // ── holdings page ──
+  const HELD_COLS = [['Stock', 'symbol'], ['Industry', 'industry'], ['Qty', 'quantity', 1], ['Average', 'average', 1], ['Close', 'close', 1],
+    ['Value', 'value', 1], ['P&L', 'pnl', 1], ['P&L %', 'pnl_pct', 1], ['ATRs from average', 'vs_average_atr', 1], ['Position', 'position'],
+    ['Support', 'support_atr', 1], ['ATR away', 'support_atr', 1], ['Resistance', 'resistance_atr', 1], ['ATR away', 'resistance_atr', 1],
+    ['Average in zone', 'average_zone']];
+
+  function drawHeld() {
+    const table = document.getElementById('sw-held');
+    if (!table) return;
+    table.querySelector('thead').innerHTML = header(HELD_COLS, list.heldSort);
+    table.querySelector('tbody').innerHTML = sorted(held.rows, list.heldSort).map((r) => `
+      <tr${r.chart ? ` data-symbol="${App.esc(r.symbol)}"` : ''}>
+        <td>${r.chart ? `<a href="${link(r.symbol)}">${App.esc(r.symbol)}</a>` : App.esc(r.symbol)}</td>
+        <td class="sw-left muted">${App.esc(r.industry) || '—'}</td><td>${r.quantity}</td><td>${App.num(r.average)}</td><td>${App.num(r.close)}</td>
+        <td>${App.money(r.value, { sign: false })}</td><td class="${App.tone(r.pnl)}">${App.money(r.pnl)}</td><td>${change(r.pnl_pct)}</td>
+        <td>${App.num(r.vs_average_atr, 1)}</td>
+        <td class="sw-left">${r.position ? position(r.position) : `<span class="muted">${App.esc(r.note)}</span>`}${
+          r.no_support_below ? ' <span class="sw-res">· no support below</span>' : ''}</td>
+        <td>${range(r.support)}</td><td>${atr(r.support_atr)}</td><td>${range(r.resistance)}</td><td>${atr(r.resistance_atr)}</td>
+        <td class="sw-left">${r.average_zone ? range(r.average_zone) : '—'}</td>
+      </tr>`).join('');
+    bindSort(table, 'heldSort', drawHeld);
+    table.querySelectorAll('tbody tr[data-symbol]').forEach((tr) => tr.addEventListener('click', (e) => {
+      if (!e.target.closest('a')) location.hash = link(tr.dataset.symbol);
+    }));
+  }
+
+  async function renderHoldings(el) {
+    el.innerHTML = '<div class="section-card"><div class="skeleton" style="height:160px"></div></div>';
+    held = await App.api('swing/holdings');
+    const head = `<div class="page-header">
+        <div><div class="page-title"><i class="fa-solid fa-layer-group"></i>Swing review</div>
+          <div class="page-subtitle">Your holdings against their support and resistance zones</div></div>
+        ${held.available ? `<div class="header-meta">Read from Kite ${App.esc(held.fetched_at.slice(0, 16).replace('T', ' '))}</div>` : ''}
+      </div>${tabs('holdings')}`;
+    if (!held.available) {
+      el.innerHTML = head + App.emptyState('fa-briefcase', 'Holdings not read yet',
+        'Run <code>algo swing holdings</code> after <code>algo login</code>, or <code>algo swing scan</code>, which does it too.');
+      return;
+    }
+    const t = held.totals;
+    const count = (f) => held.rows.filter(f).length;
+    el.innerHTML = `${head}
+      <p class="sw-note"><i class="fa-solid fa-circle-info"></i>${App.esc(held.note)}</p>
+      <div class="kpi-strip">
+        ${App.kpi('Holdings', t.holdings, '', 'fa-briefcase', 'tone-blue', `${App.money(t.invested, { sign: false })} invested`)}
+        ${App.kpi('Value', App.money(t.value, { sign: false }), '', 'fa-wallet', 'tone-slate', 'at the last close')}
+        ${App.kpi('P&L', App.money(t.pnl), App.tone(t.pnl), 'fa-chart-line', t.pnl >= 0 ? 'tone-green' : 'tone-red', App.pct(t.pnl_pct, 1))}
+        ${App.kpi('Near support', count((r) => r.position === 'near support'), '', 'fa-arrow-down', 'tone-green', 'within 1 ATR')}
+        ${App.kpi('Near resistance', count((r) => r.position === 'near resistance'), '', 'fa-arrow-up', 'tone-red', 'within 1 ATR')}
+        ${App.kpi('No support below', count((r) => r.no_support_below), '', 'fa-arrow-trend-down', 'tone-amber', 'below all its zones')}
+      </div>
+      <div class="section-card">
+        <div class="table-wrap"><table class="data-table clickable" id="sw-held"><thead></thead><tbody></tbody></table></div>
+      </div>`;
+    drawHeld();
   }
 
   // ── stock page ──
@@ -207,7 +273,15 @@
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
     const candles = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false,
-      wickUpColor: '#10b981', wickDownColor: '#ef4444' });
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
+      autoscaleInfoProvider: (base) => {                     // keep your average on the chart, however far away
+        const out = base();
+        if (out?.priceRange && s.held?.average) {
+          out.priceRange.minValue = Math.min(out.priceRange.minValue, s.held.average);
+          out.priceRange.maxValue = Math.max(out.priceRange.maxValue, s.held.average);
+        }
+        return out;
+      } });
     const rows = s[view];
     candles.setData(rows.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
     candles.priceScale().applyOptions({ scaleMargins: { top: 0.05, bottom: s.is_index ? 0.05 : 0.2 } });
@@ -218,6 +292,9 @@
         color: c.close >= c.open ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)' })));
     }
     candles.attachPrimitive(bands);
+    if (s.held?.average) {
+      candles.createPriceLine({ price: s.held.average, color: '#3b82f6', lineWidth: 2, axisLabelVisible: true, title: 'your average' });
+    }
     if (showPivots) {
       const seen = new Set();
       const marks = [];
@@ -252,8 +329,9 @@
         'It is not in the swing universe, or has no candles yet.', '<a class="btn-secondary" href="#/swing">Back to the list</a>');
       return;
     }
-    const facts = s.is_index ? App.esc(s.kind === 'theme' ? 'Theme index' : 'Sector index')
-      : `${App.esc(s.industry)} · ${s.indices.map(App.esc).join(', ') || 'no index'} · ₹${App.num(s.traded_cr, 0)} crore a day`;
+    const facts = (s.is_index ? App.esc(s.kind === 'theme' ? 'Theme index' : 'Sector index')
+      : `${App.esc(s.industry) || 'Outside the universe'} · ${s.indices.map(App.esc).join(', ') || 'no index'} · ₹${App.num(s.traded_cr, 0)} crore a day`)
+      + (s.held ? ` · you hold ${s.held.quantity} at ₹${App.num(s.held.average)}` : '');
     el.innerHTML = `
       <div class="page-header">
         <div><a class="sw-back" href="#/swing"><i class="fa-solid fa-arrow-left"></i>Swing review</a>
@@ -304,8 +382,8 @@
   }
 
   App.page('swing', {
-    title: (args) => (args[0] ? `${args[0]} · Swing` : 'Swing review'),
-    render: (el, args) => (args[0] ? renderStock(el, args[0]) : renderList(el)),
+    title: (args) => (args[0] === 'holdings' ? 'Holdings · Swing' : args[0] ? `${args[0]} · Swing` : 'Swing review'),
+    render: (el, args) => (args[0] === 'holdings' ? renderHoldings(el) : args[0] ? renderStock(el, args[0]) : renderList(el)),
     destroy: removeChart,
   });
 })();

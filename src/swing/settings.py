@@ -39,6 +39,11 @@ class SwingConfig(BaseModel):
         """Store key of the indices' own daily candles (``equity_daily``)."""
         return f"{self.universe}_indices"
 
+    @property
+    def holdings_universe(self) -> str:
+        """Store key of the held stocks' daily candles (some are outside the universe)."""
+        return f"{self.universe}_holdings"
+
 
 def load_swing_config(overrides: dict[str, Any] | None = None) -> SwingConfig:
     return load_model(CONFIG_PATH, SwingConfig, overrides)
