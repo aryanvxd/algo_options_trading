@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from swing.backtest import BacktestConfig
+from swing.setups import SetupConfig
 from swing.zones import ZoneConfig
 from trading_core.config import load_model
 
@@ -25,8 +27,11 @@ class SwingConfig(BaseModel):
     universe: str = "swing"
     history_days: int = 2920
     min_traded_value_cr: float = 25.0
-    alerts_enabled: bool = False
+    overview_near_atr: float = 1.0
+    overview_stale_days: int = 7
     zones: ZoneConfig = ZoneConfig()
+    setups: SetupConfig = SetupConfig()
+    backtest: BacktestConfig = BacktestConfig()
     indices: list[IndexDef] = []
 
     @property

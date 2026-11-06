@@ -32,6 +32,16 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     c.add_argument("--days", type=int, default=730, help="days of candles shown (default 730)")
     c.add_argument("--mark", type=float, metavar="PRICE", help="draw a price line, e.g. your entry")
     c.add_argument("--mark-label", default="entry")
+    sc = ssub.add_parser("scan", help="refresh candles and write the overview and charts (data/reports/swing)")
+    sc.add_argument("--no-refresh", action="store_true", help="use the candles already stored (no Kite login)")
+    bt = ssub.add_parser("backtest", help="zones: do zones hold (default); setups: do the setups pay "
+                                          "(data/backtests/swing_<what>_*)")
+    bt.add_argument("what", nargs="?", choices=["zones", "setups"], default="zones")
+    bt.add_argument("--from", dest="start", metavar="YYYY-MM-DD", help="default: 2 years after the first candle")
+    bt.add_argument("--to", dest="end", metavar="YYYY-MM-DD", help="default: the last candle")
+    bt.add_argument("--symbols", help="comma-separated (default: every stock in the universe)")
+    bt.add_argument("--workers", type=int, default=4)
+    bt.add_argument("--name", help="folder suffix (default: dates)")
     sw.set_defaults(fn=cmd_swing)
 
 
@@ -49,7 +59,108 @@ def cmd_swing(args: argparse.Namespace, platform: PlatformConfig) -> int:
         return _zones(args, cfg, platform)
     if args.action == "chart":
         return _chart(args, cfg, platform)
+    if args.action == "backtest":
+        return _backtest(args, cfg, platform)
+    if args.action == "scan":
+        return _scan(args, cfg, platform)
     return 1
+
+
+def _scan(args, cfg, platform: PlatformConfig) -> int:
+    from swing import overview
+    from swing.bars import avg_traded_value_cr, daily_bars
+    from swing.chart import render_html
+    from swing.universe import load_swing_universe
+    from swing.zones import find_zones
+    from trading_core.marketdata.store import MarketStore, slug
+
+    store = MarketStore(platform.marketdata.dir)
+    if not args.no_refresh:
+        stored = daily_bars(store, cfg.index_universe)
+        last = max((b.dates[-1] for b in stored.values()), default=None)
+        start = (last - timedelta(days=5)).isoformat() if last else None
+        _data(argparse.Namespace(start=start, end=None, indices_only=False), cfg, platform)
+    u = load_swing_universe(platform, cfg.universe)
+    index_bars = daily_bars(store, cfg.index_universe)
+    stock_bars = daily_bars(store, cfg.universe)
+    latest = max(b.dates[-1] for b in index_bars.values())
+    fresh = latest - timedelta(days=cfg.overview_stale_days)
+    folder = platform.reports_dir / "swing"
+    folder.mkdir(parents=True, exist_ok=True)
+    traded = {s: avg_traded_value_cr(b) for s, b in stock_bars.items()}
+    wanted = {s: b for s, b in stock_bars.items()
+              if b.dates[-1] >= fresh and traded[s] >= cfg.min_traded_value_cr}
+
+    def rows(bars) -> list:
+        out = []
+        for b in bars.values():
+            rep = find_zones(b, cfg.zones)
+            out.append(overview.row_for(b, rep, cfg.overview_near_atr))
+            if rep.zones:
+                (folder / f"{slug(b.symbol)}.html").write_text(render_html(b, rep), encoding="utf-8")
+        return out
+
+    indices, stocks = rows(index_bars), rows(wanted)
+    page = overview.render(u, indices, stocks, traded, cfg.overview_near_atr, cfg.min_traded_value_cr,
+                           len(u.symbols) - len(stocks))
+    path = folder / "overview.html"
+    path.write_text(page, encoding="utf-8")
+    print(f"{len(indices)} indices, {len(stocks)} of {len(u.symbols)} stocks, candles to {latest} -> {path}")
+    return 0
+
+
+def _backtest(args, cfg, platform: PlatformConfig) -> int:
+    import time
+
+    from swing import backtest
+    from swing.bars import daily_bars
+    from trading_core.marketdata.store import MarketStore
+
+    syms = [s.strip().upper() for s in args.symbols.split(",")] if args.symbols else None
+    bars = daily_bars(MarketStore(platform.marketdata.dir), cfg.universe, syms)
+    if not bars:
+        print(f"no daily candles in equity_daily/{cfg.universe}: run `algo swing data`")
+        return 2
+    first = min(b.dates[0] for b in bars.values())
+    last = max(b.dates[-1] for b in bars.values())
+    start = date.fromisoformat(args.start) if args.start else first + timedelta(days=cfg.zones.lookback_days)
+    end = date.fromisoformat(args.end) if args.end else last
+    t0 = time.perf_counter()
+    if args.what == "setups":
+        return _backtest_setups(args, cfg, platform, bars, start, end, t0)
+    events = backtest.run(bars, cfg.zones, cfg.backtest, start, end, cfg.min_traded_value_cr, args.workers)
+    name = args.name or f"{start:%Y%m%d}_{end:%Y%m%d}"
+    header = (f"Zone backtest {start} .. {end}: {len(bars)} stocks, liquid weeks only (>= Rs "
+              f"{cfg.min_traded_value_cr:g} cr/day), {time.perf_counter() - t0:.0f} s\n"
+              f"zones: {cfg.zones.model_dump()}\nbacktest: {cfg.backtest.model_dump()}")
+    folder = backtest.write(events, platform.data_dir / "backtests" / f"swing_zones_{name}", header)
+    print(backtest.summary(events))
+    print(f"\n-> {folder}")
+    return 0
+
+
+def _backtest_setups(args, cfg, platform: PlatformConfig, bars, start: date, end: date, t0: float) -> int:
+    import time
+
+    from swing import setup_backtest
+    from swing.bars import daily_bars
+    from swing.universe import load_swing_universe
+    from trading_core.marketdata.store import MarketStore
+
+    u = load_swing_universe(platform, cfg.universe)
+    index_bars = daily_bars(MarketStore(platform.marketdata.dir), cfg.index_universe)
+    members = {s: u.indices_of(s) for s in bars}
+    trades = setup_backtest.run(bars, index_bars, members, u.industry, cfg.zones, cfg.setups, start, end,
+                                cfg.min_traded_value_cr, args.workers)
+    name = args.name or f"{start:%Y%m%d}_{end:%Y%m%d}"
+    header = (f"Setup backtest {start} .. {end}: {len(bars)} stocks, {len(index_bars)} indices for Z10, liquid "
+              f"weeks only (>= Rs {cfg.min_traded_value_cr:g} cr/day), {time.perf_counter() - t0:.0f} s\n"
+              f"setups: {cfg.setups.model_dump()}\nzones: {cfg.zones.model_dump()}")
+    folder = setup_backtest.write(trades, platform.data_dir / "backtests" / f"swing_setups_{name}", header,
+                                  cfg.setups)
+    print(setup_backtest.summary(trades, cfg.setups))
+    print(f"\n-> {folder}")
+    return 0
 
 
 def _chart(args, cfg, platform: PlatformConfig) -> int:

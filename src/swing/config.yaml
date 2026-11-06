@@ -4,7 +4,8 @@
 universe: swing              # config/universes/swing.yaml, written by `algo swing universe`
 history_days: 2920           # first download: about 8 years of daily candles
 min_traded_value_cr: 25      # S5: 20-day average traded value, ₹ crore (liquid stocks only)
-alerts_enabled: false        # nothing is ever sent to Kite while this is false
+overview_near_atr: 1.0       # the overview's "near support/resistance": within 1 ATR of the zone
+overview_stale_days: 7       # a stock whose last candle is older than this is left out (suspended)
 
 zones:                       # spec section 4; ATR = simple 14-day average true range
   lookback_days: 730         # pivots and touches from the last two years
@@ -26,6 +27,30 @@ zones:                       # spec section 4; ATR = simple 14-day average true 
   full_departure_atr: 3.0    # Z5 full marks
   confluence_pad_atr: 0.25   # Z8: 200-day average, round number, 52-week low/high this close
   weights: {touches: 1, reversal: 1, departure: 1, freshness: 1, volume: 1, confluence: 1}
+
+setups:                      # spec section 5
+  near_atr: 2.0              # S1: close within 2 ATR above a support's top (or inside it)
+  min_score: 60              # S2
+  min_rr: 2.0                # S3: (next resistance bottom - entry) / (entry - stop)
+  stop_atr: 0.5              # stop = zone bottom - 0.5 ATR
+  knife_atr: 2.0             # S4: no setup after a fall of more than 2 ATR ...
+  knife_days: 3              # ... in 3 sessions
+  fill_weeks: 4              # drop the setup if the entry isn't reached in 4 weeks
+  max_hold_days: 120         # backtest: sell at the close after ~6 months
+  amount_high: 15000         # ₹ per entry for score >= high_score
+  amount_low: 7500           # ... below it
+  high_score: 75
+  cost_pct: 0.25             # round trip, delivery
+  max_open: 8
+  max_per_sector: 3          # per NSE industry
+
+backtest:                    # W3 zone backtest (spec section 9): `algo swing backtest`
+  move_atr: 1.0              # held = 1 ATR beyond the near edge before 1 ATR through the far edge
+  horizon_days: 60           # unresolved after 60 sessions = open
+  step_weeks: 1
+  random_per_side: 2         # baseline: random bands per weekend, each side of the close
+  random_max_atr: 3.0        # ... 0-3 ATR from the close
+  seed: 7
 
 # Sector and theme indices (spec section 2). ``name`` is Kite's tradingsymbol (NSE, INDICES);
 # ``csv`` is the index's constituent file on niftyindices.com/IndexConstituent/.

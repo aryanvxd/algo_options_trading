@@ -61,6 +61,5 @@ def test_round_trip_and_platform_universe(platform, tmp_path):
 
 def test_shipped_config_loads():
     c = load_swing_config()
-    assert c.alerts_enabled is False
     names = [ix.name for ix in c.indices]
     assert len(names) == len(set(names)) and "NIFTY ENERGY" in names and "NIFTY PSE" in names

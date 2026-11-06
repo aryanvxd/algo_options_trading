@@ -1,31 +1,27 @@
 # Weekend support/resistance swing (stocks)
 
-- **Status:** 1 Nov 2026. W1 (universe and candles) and W2 (zone engine, `algo swing zones`,
-  `algo swing chart`) done; you checked POWERGRID's zones against your chart reading and
-  confirmed them (section 4). Next: W3, the zone backtest. Numbers marked
-  *(proposed)* are starting points. Your answers of 1 Nov 2026 are in section 11 and are written
-  into the sections below.
-- **Type:** stock buying (cash, CNC delivery), swing to positional: held for days to months.
-  Long only.
-- **Not** an intraday algo. It runs at the weekend, and Kite **alerts / ATOs** do the watching
-  during the week. No market orders. GTTs only as the exit part of an ATO you approved
-  (section 6), never on their own.
-- **Top-down:** sector indices are scanned first for their own zones, which gives an industry
-  overview; then the stocks in those indices.
-- **Built as its own section** of the platform, `src/swing/`, with its own dashboard pages. The
-  intraday `BaseAlgo` runner doesn't fit a scan that runs once a week over many stocks.
+- **Status:** 6 Nov 2026. **A review tool, not an automated strategy** (your decision). The
+  backtests found no edge: neither the zones (9a) nor the setups (9b) beat random levels or random
+  entries. So the zones, charts and sector overview are kept for your own decisions, and **nothing
+  here creates alerts, ATOs, GTTs or orders**. Sections 5–7 are parked: they record the plan that
+  was tested. The build order is section 10.
+- **What it is:** a weekend look at many stocks. Sector indices first, for an industry overview,
+  then the stocks in them, with their support and resistance zones and charts.
+- **What it isn't:** a signal. "Near support" says where price is against past turning points, not
+  that it will bounce (9a). The tool shows information, not recommendations.
+- **Built as its own section** of the platform, `src/swing/`. The intraday `BaseAlgo` runner doesn't
+  fit a scan that runs once a week over many stocks. It needs no database tables.
 
 ## 1. Idea
 
 1. **Every weekend, scan the sector indices, then their stocks,** on daily and weekly candles.
 2. **Mark support and resistance zones** where price has turned several times. Zones are bands,
    not single lines.
-3. **Set up buys** for stocks that are near a strong support zone, with a stop below the zone
-   and a target at the next resistance zone above.
-4. **You approve each setup** on the dashboard, after editing the entry price and quantity if
-   you want, and choose ATO or alert only.
-5. **Hand the plan to Kite** as alerts and ATOs (alert-triggered orders), so an order goes in only
-   if price actually comes to the zone during the week.
+3. **Show where each sector and stock sits** against those zones, with charts, for your own
+   decisions.
+
+The original idea went further: set up buys near support and hand them to Kite as alerts and
+ATOs. The backtests found no edge in that (9a, 9b), so it is parked (sections 5–7).
 
 ### The structure, from POWERGRID (two years of daily data, Nov 2024 – Oct 2026)
 
@@ -74,19 +70,19 @@ Two levels: sector indices, then the stocks in them.
 | Corporate actions | Kite's daily candles are adjusted for splits and bonuses. Dividends are not, which is fine for zones |
 | Refresh | the scan downloads the past week's candles first: `algo swing data --from <last Monday>`. One request per instrument: about 420 requests, a few minutes |
 | Index changes | NSE rebalances in March and September. Re-run `algo swing universe` then |
+| Index history | Kite returns **no daily candles for NIFTYCONGLOMERATE** (a new index), and NIFTY CHEMICALS and NIFTY WAVES start in Nov 2025 (232 days, under the 250 needed for zones). Z10 can't use them yet |
 
 ## 3. Schedule
 
 | When | What |
 |---|---|
-| **Saturday or Sunday**, any time | `algo swing scan`: update candles → sector zones → stock zones → rank setups → write the weekend report. The dashboard shows it |
-| Weekend, you | review the sector overview and the setups on the dashboard. For each setup: edit entry price and quantity, pick **ATO** or **alert only**, pick the exit (**OCO** or **target only**), then approve or drop |
-| Weekend or Monday before 09:15, you | **Create alerts**, a button on the dashboard (or `algo swing alerts push`). Needs that day's `algo login` |
-| During the week | nothing runs on the laptop. Kite watches the alerts and fires the ATO orders |
-| Next weekend | `algo swing sync`: read alert history, orders and holdings from Kite. Open trades are updated, and stops and targets are reviewed |
+| **Saturday or Sunday**, any time | `algo swing scan`: update candles (needs that day's `algo login`) → sector zones → stock zones → write the overview and charts |
+| Weekend, you | read the overview. Any decision, and any order, is yours, made in Kite as usual |
+| During the week | nothing runs |
 
-**Laptop constraint:** the scan needs no market hours, so the 09:30 rule doesn't apply. The
-order-book work in section 7 is the only part that needs the market open.
+**Laptop constraint:** the scan needs no market hours, so the 09:30 rule doesn't apply. It uses
+Kite's historical candles, not a WebSocket connection, so it doesn't touch the 3-connection limit.
+Run it outside market hours anyway: it uses the same API key as the algos.
 
 ## 4. Zones: how they are found and scored
 
@@ -142,6 +138,10 @@ overview page (section 8).
 
 ## 5. Setups (buy only)
 
+> **Parked, 6 Nov 2026.** The setups showed no edge over random entries (9b), so the tool doesn't
+> produce them. This section is the rule set that was tested. `src/swing/setups.py` stays only so
+> `algo swing backtest setups` can be re-run or a new idea tested against the same baseline.
+
 A stock makes the weekend list when all of these are true *(proposed)*:
 
 | # | Check | Rule |
@@ -175,6 +175,9 @@ S3's reward:risk uses the default stop even when you pick target only, so setups
 same way. A target-only trade shows "no stop" on the trades page.
 
 ## 6. Alerts and ATOs on Kite (checked in Zerodha's docs, 1 Nov 2026)
+
+> **Parked, 6 Nov 2026. Not built, and nothing in `src/swing/` writes to Kite.** Kept as the record
+> of what Kite offers, in case a tested idea needs it. Building it needs a fresh decision from you.
 
 Kite Connect has an **Alerts API** ([docs](https://kite.trade/docs/connect/v3/alerts/)):
 - **Endpoints:** `POST /alerts`, `GET /alerts`, `GET/PUT /alerts/{uuid}`, `DELETE /alerts?uuid=…`,
@@ -227,6 +230,9 @@ The **GTT exit** on an ATO entry:
 
 ## 7. Order book and "order flow" from Zerodha (checked 1 Nov 2026)
 
+> **Parked, 6 Nov 2026.** This was a confirmation layer for setups the tool no longer makes. Kept
+> as the record of what Kite offers.
+
 What Kite gives:
 
 | Wanted | Available? |
@@ -271,14 +277,13 @@ Sidebar **Swing**, with these pages:
 | Page | Shows |
 |---|---|
 | **Sectors** | every sector index with its zones: near support, mid-range or near resistance, and distance in ATRs. A small chart per index. Click through to the index's stocks. This is the industry overview |
-| **Weekend report** | the latest scan: setups ranked by score and reward:risk, with sector, entry / stop / target / quantity. Per setup: **entry price and quantity inputs**, an **ATO / alert-only toggle**, an **OCO / target-only toggle**, stop and target inputs in ₹, % or points; approve or drop. **Create alerts** for the approved ones (confirm dialog showing each exact alert, basket and GTT) |
-| **Stock page** (`#/swing/POWERGRID`) | **candlestick chart**, daily ↔ weekly, with the zones as shaded bands (support green, resistance red, flipped amber), pivots marked, volume bars and a volume-at-price histogram on the side. Lines for entry, stop and targets; markers for fills. Zone table: range, score, touches, last test, role history |
-| **Trades** | open and closed swing trades: entry, stop, current price, R multiple, days held, P&L, which alert fired. Notes, as on the strategy journals |
-| **Alerts** | every alert the platform made, synced from Kite: condition, type, status, last triggered |
-| **Order flow** (stock page tab, once recorded) | depth heatmap over time (price × time, colour = resting quantity), cumulative delta, book imbalance, with the zone overlaid |
-| **Zone backtest** | the section 9 results: hold rate by score, R by setup, comparison with random entries |
-| **Fundamentals** | for the shortlisted stocks only (this weekend's setups and open trades): the main numbers on one page, so you can judge the business before approving. Your **"fundamentally strong"** mark is set here; it allows the ₹25,000 cap (section 5). What it shows and where the data comes from are open (section 11): Kite has no fundamentals |
-| **Holdings review** | every stock you hold (read from Kite, read-only) through the same zone engine: nearest support and resistance, whether price is above or below all its supports, and how far it is from your average price in ATRs. Information for your decisions; the platform never sells holdings it didn't buy |
+| **Stock page** (`#/swing/POWERGRID`) | **candlestick chart**, daily ↔ weekly, with the zones as shaded bands (support green, resistance red, flipped amber), pivots marked, volume bars and a volume-at-price histogram on the side. Zone table: range, score, touches, last test, role history |
+| **Holdings review** | every stock you hold (read from Kite, read-only) through the same zone engine: nearest support and resistance, whether price is above or below all its supports, and how far it is from your average price in ATRs. Information for your decisions, not recommendations |
+| **Fundamentals** | the main numbers for a stock you are looking at, on one page. What it shows and where the data comes from are open (section 11): Kite has no fundamentals |
+| **Backtests** | the section 9 results, so the "no edge" finding stays next to the charts |
+
+Every page carries the same note: zones show past turning points; in the backtests they held no
+more often than random levels.
 
 **Charts:**
 - Candlesticks need a library. [Lightweight Charts](https://github.com/tradingview/lightweight-charts)
@@ -300,19 +305,118 @@ Sidebar **Swing**, with these pages:
 The intraday backtest engine (`trading_core/backtest/`) doesn't fit a daily, months-long strategy.
 This one is a separate, much simpler daily-candle simulator in `src/swing/backtest.py`.
 
-## 10. Build order *(proposed)*
+### 9a. Zone backtest, first results (W3, 1 Nov 2026)
+
+`algo swing backtest` (settings under `backtest:` in `src/swing/config.yaml`). Results in
+`data/backtests/swing_zones_v2/` (`summary.txt`, and `events.csv` with one row per event).
+
+**How it was run:**
+- All 384 stocks, weekends from Nov 2020 to Oct 2026, liquid weeks only (≥ ₹25 crore a day).
+- Each weekend, zones from the candles up to that day only.
+- An **event** is a zone that price reaches during the following week. It **held** if price
+  went 1 ATR beyond the zone's near edge before going 1 ATR through the far edge; otherwise it
+  **broke**. Unresolved after 60 sessions = open (under 1%).
+- **Baseline:** each weekend, random bands with the widths of that stock's zones, at 0–3 ATR from
+  the close, judged by the same rules. Tagged as **on a zone** or **clear of every zone**.
+- About 110,000 zone events and 119,000 random ones.
+
+**What it found:**
+
+| Comparison | Zones held | Baseline held | Edge |
+|---|---|---|---|
+| All zones vs all random bands | 59.4% | 59.9% | −0.5 |
+| Matched by width, vs bands clear of every zone | 58.5% | 59.0% | −0.5 |
+| … support zones | 60.9% | 62.1% | −1.2 |
+| … resistance zones | 56.3% | 56.3% | 0.0 |
+| … score 80–100 | 62.9% | 63.1% | −0.2 |
+| … flipped zones | 59.0% | 59.6% | −0.6 |
+| … 10 or more touches | 60.7% | 61.1% | −0.4 |
+
+- **Width explains held%.** A band is reached at its near edge, so "held" needs 1 ATR one way
+  and "broke" needs the zone's width plus 1 ATR the other. Wider bands "hold" more, zones or not:
+  56% under 0.6 ATR wide, 77% over 2 ATR, for zones and random bands alike.
+- **The score ranks zones only through width.** Held% rises from 57% (score under 40) to 66%
+  (80+), but high-scoring zones are wider. Matched by width, no score band beats random by more
+  than 0.6 points.
+- **No part of the score helps** on its own: touches, flips, departure, freshness, volume and
+  confluence all sit within ±1.2 points of random once width is matched.
+- **Zones cover most of the price range:** 71% of the random bands landed on a real zone.
+- **Stable over time:** 2020–2023 and 2024–2026 show the same pattern.
+- With about 100,000 events, an edge of 1 point would show clearly. There isn't one.
+
+**What it means:** on daily candles, "price bounces from a support or resistance zone" is, by
+itself, no better than a random price level of the same width. The zones are still useful for
+**placing** an entry, stop and target, but they are not, on their own, a reason to expect a
+bounce. Any edge has to come from something else, and the setup test (W4, "Do the setups pay?",
+against random entries) is where that must show. You chose to go straight to the setup test.
+
+### 9b. Setup backtest, first results (W4, 1 Nov 2026)
+
+`algo swing backtest setups` (`src/swing/setups.py`, `src/swing/setup_backtest.py`; settings under
+`setups:`). Results in `data/backtests/swing_setups_v1/` (`summary.txt`, `trades.csv`).
+
+**How it was run:**
+- All 384 stocks, weekends from Nov 2020 to Oct 2026, liquid weeks only.
+- Section 5's rules: S1 near support, S3 reward:risk ≥ 2, S4 knife filter. S2 (score ≥ 60), S7
+  (trend) and Z10 (sector index near support) are recorded on every setup and reported both ways.
+  S6 (results dates) can't be applied: there's no history of results dates.
+- **Entry:** limit buy at the zone top, filled if reached within 4 weeks. **Stop:** zone bottom −
+  0.5 ATR. **Target:** the next resistance's bottom.
+- Each setup traded in **both exit modes**: OCO (stop + target) and target only (no stop; sold
+  after about 6 months if the target never comes). Costs 0.25% per round trip.
+- **Baseline:** every setup has a **random twin**: same stock and weekend, entry at a random level
+  0–2 ATR below the close, the same stop and target distances.
+- 4,365 setups (1,820 with score ≥ 60), and as many twins.
+
+**What it found (S2 setups, score ≥ 60; average return per filled trade, net of costs):**
+
+| | Setups | Random twins |
+|---|---|---|
+| **OCO:** win rate | 24.4% | 28.2% |
+| **OCO:** stopped out | 75.6%, median 2 days | 71.7% |
+| **OCO:** average return | −0.17% | 0.00% |
+| **Target only:** win rate | 79.3% | 80.5% |
+| **Target only:** average return | +1.87% | +2.18% |
+| **Book** (8 open, 3 per industry, ₹7,500/₹15,000): OCO, six years | −₹5,781 | −₹1,919 |
+| **Book:** target only, six years | +₹73,592 | +₹72,781 |
+
+- **No filter helps:** the trend filter (S7), the sector filter (Z10) and both together stay within
+  half a point of their twins. Higher scores do slightly *worse* than lower ones.
+- **OCO:** the stop (half an ATR under a zone that is often only half an ATR wide) is about one
+  ATR below the entry, and normal daily movement reaches it in two days three times in four.
+- **Target only** makes money, but its random twins make just as much: the profit is the market's
+  rise over 2020–2026, which any entry gets, not the zones. And without a stop the risk sits in
+  trades held for months: 2026's setups average −0.58%, many still open.
+- **Fill rate:** setups fill 93% of the time against 70% for twins. Price reaching the zone top
+  is close by, so the order fills, and then behaves like any other level.
+
+**What it means:** as specified, the strategy has **no edge over random entries** with the same
+geometry, in either exit mode, with or without the trend and sector filters. Together with 9a,
+the support/resistance idea doesn't, by itself, choose better entries than chance on these
+stocks. **You decided on 6 Nov 2026 to keep it as a review tool** (top of this file, section 10).
+
+## 10. Build order
+
+**Done:**
 
 | Step | What |
 |---|---|
-| W1 | Sector universe (`algo swing universe`: indices, members, industries from NSE's files; you check it); daily candles for the indices and stocks (`algo swing data`); weekly bars (`algo swing bars`) |
-| W2 | Zone engine (Z1–Z9) + `algo swing zones POWERGRID` printout, and the same for a sector index (`algo swing zones "NIFTY ENERGY"`). Check its zones against your chart reading before going further |
-| W3 | Zone backtest (section 9, first test). Tune the score |
-| W4 | Setup rules, sizing, weekend report (`algo swing scan`), storage (migration: zones, setups, trades, alerts) |
-| W5 | Dashboard: sectors, weekend report with the approval inputs and toggles, stock page with candlesticks and zones, trades |
-| W6 | Kite alerts: read and sync first (including reading one hand-made ATO with a GTT, section 6), then **simple** alerts, then ATO + GTT exit behind `alerts_enabled` and the confirm dialog |
-| W7 | Order-book recorder for near-zone stocks, order-flow measures, the order-flow tab |
-| W8 | Holdings review page: the zone engine over your Kite holdings, refreshed with each weekend scan |
-| W9 | Fundamentals page for shortlisted stocks, and the "fundamentally strong" mark. A manual mark can come earlier, with W5, so the ₹25,000 cap works before the data source is settled |
+| W1 | Sector universe (`algo swing universe`), daily candles (`algo swing data`), weekly bars (`algo swing bars`) |
+| W2 | Zone engine, `algo swing zones <SYMBOL>`, `algo swing chart <SYMBOL>`. POWERGRID's zones confirmed by you |
+| W3 | Zone backtest, `algo swing backtest`: no edge (9a) |
+| W4 | Setup rules and setup backtest, `algo swing backtest setups`: no edge (9b) |
+| R1 | `algo swing scan`: refresh candles, then write the **overview** to `data/reports/swing/overview.html`: sectors first, then liquid stocks with their distance to the nearest zones, each linked to its chart in the same folder. "Near" = within 1 ATR. No scores, no database tables. `--no-refresh` skips Kite. A scan rewrites every chart, so one made with `algo swing chart --mark` loses its line |
+
+**Next, for the review tool:**
+
+| Step | What |
+|---|---|
+| R2 | Dashboard: Sectors and Stock pages (section 8), with candlesticks from vendored Lightweight Charts. Touches shared dashboard files, so it comes after this branch is merged |
+| R3 | Holdings review: your Kite holdings through the zone engine, read-only |
+| R4 | Fundamentals page, once its data source is settled |
+
+**Dropped:** the weekend approval report, trades and alerts pages, Kite alerts/ATOs/GTTs (old W6),
+and the order-book recorder (old W7).
 
 ## 11. Questions for you
 
@@ -330,14 +434,18 @@ This one is a separate, much simpler daily-candle simulator in `src/swing/backte
 | 7 | Amount per trade | at most **₹15,000** per entry: ₹10,000–15,000 for stronger setups, ₹5,000–10,000 for less certain ones |
 | 8 | Book limits | **8 open, 3 per sector.** Adding lower only in target-only trades. **₹25,000** per stock, only for fundamentally strong stocks |
 | 9 | Sector list | **All sectoral and thematic indices**, liquid stocks only |
-| 10 | Fundamentals | a dedicated **fundamental analysis page** for the shortlisted stocks (W9) |
+| 10 | Fundamentals | a dedicated **fundamental analysis page** (R4) |
+
+Rows 2–5, 7 and 8 belong to the parked setups (section 5).
+
+### Answered, 6 Nov 2026
+
+| # | Question | Your answer |
+|---|---|---|
+| 11 | After the backtests (9a, 9b) | **Keep it as a review tool**: zones, charts, sector overview and holdings review for your own decisions; no automated entries |
 
 ### Still open
 
 1. **Fundamentals:** which numbers you want on the page (e.g. sales and profit growth, ROE,
    debt, promoter holding, valuation), and the data source. Kite has none; options are the
-   companies' NSE filings or a site like Screener. To settle before W9.
-2. **Score tiers:** is score ≥ 75 → ₹15,000 and 60–74 → ₹7,500 a fair default? Settle with the
-   W3 backtest.
-3. **Results dates (S6):** the market calendar keeps results dates only for NIFTY 50 stocks
-   today. It needs widening to the swing universe; to settle in W4.
+   companies' NSE filings or a site like Screener. To settle before R4.

@@ -16,6 +16,18 @@ from swing.zones import ZoneReport
 W, H = 1200, 560                       # plot area
 PAD_L, PAD_R, PAD_T, PAD_B = 10, 170, 16, 28
 
+NOTE = ("Zones show past turning points, not a forecast: in the backtests they held no more often "
+        "than random price levels of the same width. Information only, not a recommendation.")
+THEME = """:root { --bg:#fbfaf7; --fg:#1f2328; --muted:#6b7280; --grid:#e5e2da; --up:#1a7f5a; --dn:#c23b3b;
+  --sup:rgba(26,127,90,.16); --res:rgba(194,59,59,.15); --flip:rgba(201,138,20,.20); --in:rgba(90,90,200,.15);
+  --supt:#1a7f5a; --rest:#b03434; --flipt:#a8700c; --mark:#2f5fd0; }
+@media (prefers-color-scheme: dark) { :root { --bg:#16181c; --fg:#e6e6e6; --muted:#9aa0a6; --grid:#2a2d33;
+  --up:#3fbf8a; --dn:#e06666; --sup:rgba(63,191,138,.16); --res:rgba(224,102,102,.16);
+  --flip:rgba(230,170,60,.20); --supt:#3fbf8a; --rest:#e06666; --flipt:#e6aa3c; --mark:#7aa2ff; } }
+body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,sans-serif; }
+h1 { font-size:18px; margin:0 0 4px; } .sub { color:var(--muted); margin-bottom:10px; }
+.note { color:var(--muted); font-size:12px; margin:0 0 10px; }"""
+
 
 def _nice_step(span: float, ticks: int = 8) -> float:
     raw = span / ticks
@@ -95,14 +107,7 @@ def render_html(daily: Bars, rep: ZoneReport, days: int = 730, mark: float | Non
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <style>
-:root {{ --bg:#fbfaf7; --fg:#1f2328; --muted:#6b7280; --grid:#e5e2da; --up:#1a7f5a; --dn:#c23b3b;
-  --sup:rgba(26,127,90,.16); --res:rgba(194,59,59,.15); --flip:rgba(201,138,20,.20); --in:rgba(90,90,200,.15);
-  --supt:#1a7f5a; --rest:#b03434; --flipt:#a8700c; --mark:#2f5fd0; }}
-@media (prefers-color-scheme: dark) {{ :root {{ --bg:#16181c; --fg:#e6e6e6; --muted:#9aa0a6; --grid:#2a2d33;
-  --up:#3fbf8a; --dn:#e06666; --sup:rgba(63,191,138,.16); --res:rgba(224,102,102,.16);
-  --flip:rgba(230,170,60,.20); --supt:#3fbf8a; --rest:#e06666; --flipt:#e6aa3c; --mark:#7aa2ff; }} }}
-body {{ margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui,sans-serif; }}
-h1 {{ font-size:18px; margin:0 0 4px; }} .sub {{ color:var(--muted); margin-bottom:10px; }}
+{THEME}
 button {{ font:inherit; padding:4px 12px; margin-right:6px; border:1px solid var(--grid); background:transparent;
   color:var(--fg); border-radius:6px; cursor:pointer; }} button.on {{ background:var(--grid); }}
 svg {{ width:100%; height:auto; display:block; }} .hide {{ display:none; }}
@@ -120,6 +125,7 @@ tr.flip td:first-child {{ color:var(--flipt); }}
 <h1>{title}</h1>
 <div class="sub">as of {rep.asof} · close {rep.close:,.2f} · ATR(14) {rep.atr:,.2f} · zones from the last two years ·
 green support, red resistance, amber flipped · hover a candle or zone for details</div>
+<p class="note">{html.escape(NOTE)}</p>
 <div><button id="bd" class="on">Daily</button><button id="bw">Weekly</button></div>
 <div id="vd">{_svg(d, rep, mark, mark_label)}</div>
 <div id="vw" class="hide">{_svg(w, rep, mark, mark_label)}</div>
