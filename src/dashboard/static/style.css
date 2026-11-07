@@ -410,9 +410,6 @@ details.spec summary { cursor: pointer; font-size: 0.86rem; display: flex; gap: 
 .sw-bg-in { background: rgba(59, 130, 246, 0.3); }
 .sw-legend { font-size: 0.76rem; color: var(--muted); min-height: 1.2em; margin: 6px 0; white-space: pre; }
 .sw-chart { height: min(62vh, 560px); min-height: 320px; }
-.sw-small { font-size: 0.74rem; }
-.sw-pad { padding: 10px 2px; font-size: 0.84rem; }
-.sw-pill { display: inline-block; border-radius: 999px; padding: 1px 9px; font-size: 0.7rem; font-weight: 700; }
 .sw-z-support { color: var(--accent-dark); font-weight: 600; }
 .sw-z-resistance { color: #dc2626; font-weight: 600; }
 .sw-z-flipped { color: #b45309; font-weight: 600; }
