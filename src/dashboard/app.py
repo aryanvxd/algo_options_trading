@@ -196,6 +196,17 @@ def create_app(db: Database, clock: Clock | None = None, platform: PlatformConfi
     def api_swing_holdings():
         return swing_queries.holdings(platform)
 
+    @app.get("/api/swing/orders")
+    def api_swing_orders():
+        return swing_queries.orders(swing_queries.kite_client(db, platform, clock), clock.now())
+
+    @app.get("/api/swing/index/{name}/stocks")
+    def api_swing_index_stocks(name: str):
+        out = swing_queries.index_stocks(platform, name, swing_queries.kite_client(db, platform, clock), clock.now())
+        if out is None:
+            raise HTTPException(404, f"{name!r} is not in the last scan: run `algo swing scan`")
+        return out
+
     @app.get("/api/swing/stock/{symbol}")
     def api_swing_stock(symbol: str):
         out = swing_queries.stock(platform, symbol)

@@ -63,8 +63,9 @@ def test_unknown_or_missing_symbol_is_404(client):
 
 def test_holdings_page_and_held_stock(client, platform):
     assert client.get("/api/swing/holdings").json()["available"] is False
+    assert client.get("/api/swing/stock/OUTSIDE").status_code == 404            # no candles anywhere
     seed(platform, "OUTSIDE", "swing_holdings")
-    assert client.get("/api/swing/stock/OUTSIDE").status_code == 404            # not held, not in the universe
+    assert client.get("/api/swing/stock/OUTSIDE").json()["held"] is None        # a stock with an order, not held
     write(platform, {"available": True, "rows": [{"symbol": "OUTSIDE", "quantity": 25, "average": 104.0}]})
     assert client.get("/api/swing/holdings").json()["rows"][0]["quantity"] == 25
     s = client.get("/api/swing/stock/OUTSIDE").json()

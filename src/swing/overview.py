@@ -10,15 +10,52 @@ from __future__ import annotations
 import html
 from dataclasses import dataclass
 from datetime import date
+from typing import Iterable, NamedTuple
 
 from swing.bars import Bars
 from swing.chart import NOTE, THEME
 from swing.universe import SwingUniverse
-from swing.zones import Zone, ZoneReport
+from swing.zones import ZoneReport
 from trading_core.marketdata.store import slug
 
 NEAR_SUPPORT, NEAR_RESISTANCE, IN_ZONE, MID, NO_ZONES = ("near support", "near resistance", "in a zone",
                                                          "mid-range", "no zones")
+
+
+class Band(NamedTuple):
+    lo: float
+    hi: float
+
+
+@dataclass
+class Place:
+    """Where a price sits against a set of zones."""
+    position: str
+    zone: Band | None            # the zone the price is inside, if any
+    support: Band | None
+    support_atr: float | None
+    resistance: Band | None
+    resistance_atr: float | None
+
+
+def place(price: float, zones: Iterable[Band], atr: float, near_atr: float) -> Place:
+    """Position: inside a zone; else within ``near_atr`` ATR of the nearer of the zones around it.
+    The scan uses this with the close, an index page with the live price."""
+    bands = [Band(*z) for z in zones]
+    sup = max((z for z in bands if z.hi < price), key=lambda z: z.hi, default=None)
+    res = min((z for z in bands if z.lo > price), key=lambda z: z.lo, default=None)
+    inside = next((z for z in bands if z.lo <= price <= z.hi), None)
+    d_sup = round((price - sup.hi) / atr, 2) if sup and atr else None
+    d_res = round((res.lo - price) / atr, 2) if res and atr else None
+    if not bands:
+        position = NO_ZONES
+    elif inside:
+        position = IN_ZONE
+    else:
+        near = [(d, label) for d, label in ((d_sup, NEAR_SUPPORT), (d_res, NEAR_RESISTANCE))
+                if d is not None and d <= near_atr]
+        position = min(near)[1] if near else MID
+    return Place(position, inside, sup, d_sup, res, d_res)
 
 
 @dataclass
@@ -29,10 +66,13 @@ class Row:
     week_pct: float | None
     month_pct: float | None
     position: str
-    support: Zone | None
+    zone: Band | None
+    support: Band | None
     support_atr: float | None
-    resistance: Zone | None
+    resistance: Band | None
     resistance_atr: float | None
+    atr: float
+    zones: list[Band]
 
 
 def _change(b: Bars, sessions: int) -> float | None:
@@ -40,28 +80,17 @@ def _change(b: Bars, sessions: int) -> float | None:
 
 
 def row_for(b: Bars, rep: ZoneReport, near_atr: float) -> Row:
-    """Position: inside a zone; else within ``near_atr`` ATR of the nearer of the zones around it."""
-    sup = next(iter(rep.supports()), None)
-    res = next(iter(rep.resistances()), None)
-    d_sup = round((rep.close - sup.hi) / rep.atr, 2) if sup else None
-    d_res = round((res.lo - rep.close) / rep.atr, 2) if res else None
-    if not rep.zones:
-        position = NO_ZONES
-    elif any(z.role == "inside" for z in rep.zones):
-        position = IN_ZONE
-    else:
-        near = [(d, label) for d, label in ((d_sup, NEAR_SUPPORT), (d_res, NEAR_RESISTANCE))
-                if d is not None and d <= near_atr]
-        position = min(near)[1] if near else MID
-    return Row(b.symbol, b.dates[-1], float(b.close[-1]), _change(b, 5), _change(b, 21), position,
-               sup, d_sup, res, d_res)
+    bands = [Band(z.lo, z.hi) for z in rep.zones]
+    p = place(rep.close, bands, rep.atr, near_atr)
+    return Row(b.symbol, b.dates[-1], float(b.close[-1]), _change(b, 5), _change(b, 21), p.position, p.zone,
+               p.support, p.support_atr, p.resistance, p.resistance_atr, rep.atr, bands)
 
 
 def _pct(v: float | None) -> str:
     return "" if v is None else f'<td data-v="{v}" class="{"up" if v >= 0 else "dn"}">{v:+.1f}%</td>'
 
 
-def _zone_cells(z: Zone | None, dist: float | None) -> str:
+def _zone_cells(z: Band | None, dist: float | None) -> str:
     if z is None:
         return '<td data-v=""></td><td data-v="9999"></td>'
     return f'<td data-v="{z.lo}">{z.lo:,.2f}–{z.hi:,.2f}</td><td data-v="{dist}">{dist:.1f}</td>'
@@ -86,8 +115,9 @@ def _member_counts(u: SwingUniverse, index: str, by_sym: dict[str, Row]) -> tupl
 def _row_dict(r: Row) -> dict:
     zone = lambda z: [z.lo, z.hi] if z else None  # noqa: E731
     return {"symbol": r.symbol, "close": r.close, "week_pct": r.week_pct, "month_pct": r.month_pct,
-            "position": r.position, "support": zone(r.support), "support_atr": r.support_atr,
-            "resistance": zone(r.resistance), "resistance_atr": r.resistance_atr}
+            "position": r.position, "zone": zone(r.zone), "support": zone(r.support), "support_atr": r.support_atr,
+            "resistance": zone(r.resistance), "resistance_atr": r.resistance_atr, "atr": r.atr,
+            "zones": [[z.lo, z.hi] for z in r.zones]}
 
 
 def payload(u: SwingUniverse, indices: list[Row], stocks: list[Row], traded: dict[str, float], near_atr: float,

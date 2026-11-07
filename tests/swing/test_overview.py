@@ -1,5 +1,5 @@
 from swing.chart import NOTE, render_html
-from swing.overview import IN_ZONE, MID, NEAR_RESISTANCE, NEAR_SUPPORT, NO_ZONES, render, row_for
+from swing.overview import IN_ZONE, MID, NEAR_RESISTANCE, NEAR_SUPPORT, NO_ZONES, place, render, row_for
 from swing.universe import SwingIndex, SwingUniverse
 from swing.zones import Zone, ZoneConfig, ZoneReport, find_zones
 from tests.swing.test_zones import make, saw
@@ -24,6 +24,16 @@ def test_position_is_the_nearer_zone_within_near_atr():
 def test_position_inside_and_without_zones():
     assert row_for(B, report(100.0, [(99.0, 101.0, "inside")]), 1.0).position == IN_ZONE
     assert row_for(B, report(100.0, []), 1.0).position == NO_ZONES
+
+
+def test_place_matches_the_scan_row():
+    zones = [(90.0, 99.0, "support"), (102.5, 110.0, "resistance")]
+    r = row_for(B, report(100.0, zones), 1.0)
+    p = place(100.0, [(lo, hi) for lo, hi, _ in zones], 2.0, 1.0)
+    assert (p.position, p.support, p.support_atr, p.resistance, p.resistance_atr) == (
+        r.position, r.support, r.support_atr, r.resistance, r.resistance_atr)
+    assert place(100.0, [], 2.0, 1.0).position == NO_ZONES
+    assert place(95.0, [(90.0, 99.0)], 2.0, 1.0).zone == (90.0, 99.0)
 
 
 def test_overview_page():

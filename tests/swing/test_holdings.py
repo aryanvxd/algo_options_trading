@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from swing.holdings import Holding, load, parse, review, review_row, write
+from swing.holdings import Holding, load, order_symbols, parse, review, review_row, write
 from swing.universe import SwingIndex, SwingUniverse
 from swing.zones import ZoneConfig
 from tests.swing.test_zones import make, saw
@@ -25,6 +25,12 @@ def bars(rows=None, symbol="AAA"):
 def test_parse_adds_t1_and_pledged_and_drops_empty_rows():
     hs = parse([kite_row("BBB", qty=5, t1=2, pledged=3), kite_row("AAA"), kite_row("ZERO", qty=0)])
     assert [(h.symbol, h.quantity) for h in hs] == [("AAA", 10), ("BBB", 10)]
+
+
+def test_order_symbols_are_cash_market_only():
+    gtts = [{"condition": {"exchange": "NSE", "tradingsymbol": "AAA"}}, {"condition": {"exchange": "NFO", "tradingsymbol": "OPT"}}]
+    alerts = [{"lhs_exchange": "BSE", "lhs_tradingsymbol": "BBB"}, {"lhs_exchange": "INDICES", "lhs_tradingsymbol": "NIFTY 50"}]
+    assert order_symbols(gtts, alerts) == {"AAA", "BBB"}
 
 
 def test_row_money_and_position():

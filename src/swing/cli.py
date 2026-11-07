@@ -89,10 +89,11 @@ def _holdings(cfg, platform: PlatformConfig) -> int:
     held = holdings.parse(client.holdings())
     store = MarketStore(platform.marketdata.dir)
     symbols = [h.symbol for h in held]
-    if symbols:
+    wanted = sorted(set(symbols) | holdings.order_symbols(client.gtts(), client.alerts()))
+    if wanted:
         end = clock.today()
         kh = KiteHistory(client, store, Manifest(db), progress=lambda _: None)
-        kh.equity_daily(cfg.holdings_universe, symbols, end - timedelta(days=cfg.zones.lookback_days + 365), end)
+        kh.equity_daily(cfg.holdings_universe, wanted, end - timedelta(days=cfg.zones.lookback_days + 365), end)
     bars = daily_bars(store, cfg.holdings_universe, symbols) if symbols else {}
     data = holdings.review(held, bars, cfg.zones, cfg.overview_near_atr, load_swing_universe(platform, cfg.universe),
                            clock.now())

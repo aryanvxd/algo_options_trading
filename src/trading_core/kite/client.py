@@ -15,6 +15,8 @@ from trading_core.kite.auth import NotLoggedIn, load_active_session
 log = logging.getLogger(__name__)
 
 QUOTE_BATCH = 500   # Kite's max instruments per quote call
+ALERT_PAGE_SIZE = 100
+ALERT_PAGES_MAX = 10    # Kite allows 500 active alerts
 
 
 class KiteClient:
@@ -80,6 +82,23 @@ class KiteClient:
     def holdings(self) -> list[dict[str, Any]]:
         """The account's delivery holdings. Read-only."""
         return self._call(self.kite.holdings) or []
+
+    def gtts(self) -> list[dict[str, Any]]:
+        """The account's GTT triggers. Read-only."""
+        return self._call(self.kite.get_gtts) or []
+
+    def alerts(self) -> list[dict[str, Any]]:
+        """The account's alerts and ATOs, without the deleted ones. Read-only. The library has no
+        alerts call, so the route is added here; pages stop when one brings nothing new."""
+        self.kite._routes = {**self.kite._routes, "alerts": "/alerts"}
+        out: dict[str, dict[str, Any]] = {}
+        for page in range(1, ALERT_PAGES_MAX + 1):
+            rows = self._call(self.kite._get, "alerts", params={"page": page, "page_size": ALERT_PAGE_SIZE}) or []
+            fresh = {r["uuid"]: r for r in rows if r.get("uuid") not in out}
+            out.update(fresh)
+            if not fresh or len(rows) < ALERT_PAGE_SIZE:
+                break
+        return [r for r in out.values() if r.get("status") != "deleted"]
 
     def basket_margin(self, orders: list[dict[str, Any]]) -> float | None:
         """Margin Kite would block for these orders together (hedge benefit included), ignoring the

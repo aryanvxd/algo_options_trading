@@ -20,6 +20,8 @@ from swing.universe import SwingUniverse
 from swing.zones import ZoneConfig, find_zones
 from trading_core.config import PlatformConfig
 
+CASH_EXCHANGES = ("NSE", "BSE")
+
 
 @dataclass
 class Holding:
@@ -40,6 +42,14 @@ def parse(raw: list[dict[str, Any]]) -> list[Holding]:
             out.append(Holding(h["tradingsymbol"], h.get("exchange", "NSE"), qty, float(h.get("average_price") or 0),
                                float(h.get("last_price") or 0)))
     return sorted(out, key=lambda h: h.symbol)
+
+
+def order_symbols(gtts: list[dict[str, Any]], alerts: list[dict[str, Any]]) -> set[str]:
+    """Cash-market stocks with a GTT, ATO or alert, so their charts open too."""
+    out = {(g.get("condition") or {}).get("tradingsymbol") for g in gtts
+           if (g.get("condition") or {}).get("exchange") in CASH_EXCHANGES}
+    out |= {a.get("lhs_tradingsymbol") for a in alerts if a.get("lhs_exchange") in CASH_EXCHANGES}
+    return out - {None, ""}
 
 
 def review_row(h: Holding, bars: Bars | None, zcfg: ZoneConfig, near_atr: float, u: SwingUniverse) -> dict[str, Any]:
