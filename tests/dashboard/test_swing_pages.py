@@ -45,6 +45,7 @@ def test_stock_page_data(client, platform):
     assert "NIFTY ENERGY" in s["indices"] and "held no more often" in s["note"]
     assert len(s["daily"]) > len(s["weekly"]) > 0 and s["daily"][0]["time"] < s["daily"][-1]["time"]
     assert s["zones"] and s["profile"] and s["zones"][0]["hi"] > s["zones"][-1]["hi"]
+    assert isinstance(s["timeline"], list) and s["today"]
     weeks = {c["time"] for c in s["weekly"]}
     assert all(p["week"] in weeks for z in s["zones"] for p in z["pivots"])     # weekly markers land on a bar
     assert "score" not in s["zones"][0]                                         # distances, not scores

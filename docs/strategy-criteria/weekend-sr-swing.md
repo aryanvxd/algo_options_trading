@@ -282,9 +282,20 @@ Sidebar **Swing**, with these pages:
 | **Index page** (`#/swing/NIFTY%20ENERGY`) | the stock page for an index, with the **list of its liquid stocks** under the chart: price, position, the zone it is in, nearest support and resistance. Prices refresh from Kite every 30 seconds while the page is open and you are logged in (last close otherwise), and the position is worked out against that price. Filter by position; click a stock for its chart |
 | **Orders** (`#/swing/orders`) | your **GTTs, ATOs and alerts** on Kite, read live when the page opens, with a filter between the three. **Read-only**: there are no buttons to change them; you manage them in Kite. Nothing is saved to disk |
 | **Orders on charts** | active GTT and ATO/alert levels drawn on that stock's chart, with a switch to turn them off |
-| **Charts** (`#/swing/charts`) | one page to flip through charts: pick a list (indices, holdings, stocks with orders, all stocks, or one index's stocks), then step through it or search |
+| **Timeline** (on the stock page) | what happened and what's coming for that stock: results dates from the market calendar, zone holds and breaks from the last year, and your active GTTs, ATOs and alerts. Results also show on the chart as vertical lines, with a switch. First version: filings, reports and other events come later |
 | **Fundamentals** | the main numbers for a stock you are looking at, on one page. What it shows and where the data comes from are open (section 11): Kite has no fundamentals |
 | **Backtests** | the section 9 results, so the "no edge" finding stays next to the charts |
+
+**Pages are organised as sub pages, with a breadcrumb at the top of each:**
+
+| Path | Page |
+|---|---|
+| Swing review | `#/swing` |
+| Swing review › NIFTY ENERGY | `#/swing/NIFTY%20ENERGY`: the index and its stocks |
+| Swing review › NIFTY ENERGY › POWERGRID | `#/swing/NIFTY%20ENERGY/POWERGRID`: a stock reached from its index |
+| Swing review › Holdings › a stock | `#/swing/holdings/<SYMBOL>` |
+| Swing review › Orders › a stock | `#/swing/orders/<SYMBOL>` |
+| Swing review › a stock | `#/swing/<SYMBOL>`: from the stocks list |
 
 Every page carries the same note: zones show past turning points; in the backtests they held no
 more often than random levels.
@@ -429,7 +440,8 @@ stocks. **You decided on 6 Nov 2026 to keep it as a review tool** (top of this f
 | R2 | Dashboard: a **Swing** sidebar entry with the Sectors and Stock pages (section 8), candlesticks from vendored Lightweight Charts |
 | R3 | Holdings: `algo swing holdings` (also run by the scan) and the Holdings tab; your average as a line on a held stock's chart. Read-only. Quantities checked against Kite's own P&L on 6 Nov 2026 (T+1 and pledged shares not yet seen in real data) |
 
-| R3b | Index pages list their stocks with live positions; **Orders** tab (GTTs, ATOs, alerts, read-only) with their levels on charts; **Charts** tab. All under the Swing tabs for now; they move to the main sidebar later |
+| R3b | Index pages list their stocks with live positions; **Orders** tab (GTTs, ATOs, alerts, read-only) with their levels on charts. Under the Swing tabs for now; they move to the main sidebar later |
+| R3c | Sub pages with a breadcrumb; first version of the stock **timeline**, with results on the chart |
 
 **Next, for the review tool:**
 

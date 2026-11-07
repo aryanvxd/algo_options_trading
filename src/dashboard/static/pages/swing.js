@@ -1,7 +1,8 @@
 /* Swing review: #/swing (sectors, then their stocks), #/swing/holdings (your holdings against
-   their zones), #/swing/orders (your GTTs, ATOs and alerts), #/swing/charts (flip through charts)
-   and #/swing/<SYMBOL> (chart and zones; an index also lists its stocks). Information for your own
-   decisions: it makes no setups and only reads from Kite. The lists come from the last
+   their zones), #/swing/orders (your GTTs, ATOs and alerts) and #/swing/<SYMBOL> (chart, timeline
+   and zones; an index also lists its stocks). Stocks open as sub pages of where you came from:
+   #/swing/<INDEX>/<SYMBOL>, #/swing/holdings/<SYMBOL>, #/swing/orders/<SYMBOL>. Information for your
+   own decisions: it makes no setups and only reads from Kite. The lists come from the last
    `algo swing scan`; a stock's zones are computed when its page opens. */
 
 (() => {
@@ -11,9 +12,12 @@
 
   // Kept between pages, so coming back from a chart keeps the filters and the sort.
   const list = { index: '', position: '', q: '', sectorSort: null, stockSort: null, heldSort: null, memberSort: null,
-    memberPosition: '', orderKind: '', orderActive: true, orderQ: '', chartGroup: 'indices' };
+    memberPosition: '', orderKind: '', orderActive: true, orderQ: '' };
   const ORDER_KINDS = [['', 'All'], ['gtt', 'GTT'], ['ato', 'ATO'], ['alert', 'Alerts']];
   const ORDER_COLOUR = { gtt: '#8b5cf6', ato: '#0891b2', alert: '#f59e0b' };
+  const EVENT_COLOUR = '#7c3aed';
+  const HOLDINGS = '#/swing/holdings';
+  const ORDERS = '#/swing/orders';
   const MEMBER_REFRESH_MS = 30000;
   const ORDERS_MAX_AGE_MS = 60000;
   let chart = null;
@@ -26,7 +30,7 @@
 
   const tabs = (active) => `<nav class="tabs" aria-label="Swing sections">${
     [['list', '#/swing', 'fa-layer-group', 'Sectors and stocks'], ['holdings', '#/swing/holdings', 'fa-briefcase', 'Holdings'],
-      ['orders', '#/swing/orders', 'fa-bell', 'Orders'], ['charts', '#/swing/charts', 'fa-chart-column', 'Charts']]
+      ['orders', '#/swing/orders', 'fa-bell', 'Orders']]
       .map(([k, href, icon, label]) => `<a class="tab${k === active ? ' active' : ''}" href="${href}"><i class="fa-solid ${icon}"></i>${label}</a>`).join('')}
   </nav>`;
 
@@ -41,7 +45,11 @@
   const atr = (v) => (v === null || v === undefined ? '—' : v.toFixed(1));
   const range = (z) => (z ? `${App.num(z[0])}–${App.num(z[1])}` : '—');
   const change = (v) => `<span class="${App.tone(v)}">${App.pct(v, 1)}</span>`;
-  const link = (s) => `#/swing/${encodeURIComponent(s)}`;
+  const link = (s, base = '#/swing') => `${base}/${encodeURIComponent(s)}`;
+  const crumbs = (...items) => `<nav class="sw-crumbs" aria-label="Breadcrumb">${items.map(([label, href], i) => (
+    i === items.length - 1 ? `<span aria-current="page">${App.esc(label)}</span>`
+      : `<a href="${href}">${App.esc(label)}</a><i class="fa-solid fa-chevron-right"></i>`)).join('')}</nav>`;
+  const HOME = ['Swing review', '#/swing'];
   const zoneKey = (z) => (z.flipped ? 'flipped' : z.role);
   const zoneName = (z) => (z.flipped ? `flipped ${z.role}` : z.role);
 
@@ -142,6 +150,7 @@
     }
     const count = (rows, p) => rows.filter((r) => r.position === p).length;
     el.innerHTML = `
+      ${crumbs(['Swing review'])}
       <div class="page-header">
         <div><div class="page-title"><i class="fa-solid fa-layer-group"></i>Swing review</div>
           <div class="page-subtitle">Where each sector and stock sits against its support and resistance zones</div></div>
@@ -193,7 +202,7 @@
     table.querySelector('thead').innerHTML = header(HELD_COLS, list.heldSort);
     table.querySelector('tbody').innerHTML = sorted(held.rows, list.heldSort).map((r) => `
       <tr${r.chart ? ` data-symbol="${App.esc(r.symbol)}"` : ''}>
-        <td>${r.chart ? `<a href="${link(r.symbol)}">${App.esc(r.symbol)}</a>` : App.esc(r.symbol)}</td>
+        <td>${r.chart ? `<a href="${link(r.symbol, HOLDINGS)}">${App.esc(r.symbol)}</a>` : App.esc(r.symbol)}</td>
         <td class="sw-left muted">${App.esc(r.industry) || '—'}</td><td>${r.quantity}</td><td>${App.num(r.average)}</td><td>${App.num(r.close)}</td>
         <td>${App.money(r.value, { sign: false })}</td><td class="${App.tone(r.pnl)}">${App.money(r.pnl)}</td><td>${change(r.pnl_pct)}</td>
         <td>${App.num(r.vs_average_atr, 1)}</td>
@@ -204,14 +213,14 @@
       </tr>`).join('');
     bindSort(table, 'heldSort', drawHeld);
     table.querySelectorAll('tbody tr[data-symbol]').forEach((tr) => tr.addEventListener('click', (e) => {
-      if (!e.target.closest('a')) location.hash = link(tr.dataset.symbol);
+      if (!e.target.closest('a')) location.hash = link(tr.dataset.symbol, HOLDINGS);
     }));
   }
 
   async function renderHoldings(el) {
     el.innerHTML = '<div class="section-card"><div class="skeleton" style="height:160px"></div></div>';
     held = await App.api('swing/holdings');
-    const head = `<div class="page-header">
+    const head = `${crumbs(HOME, ['Holdings'])}<div class="page-header">
         <div><div class="page-title"><i class="fa-solid fa-layer-group"></i>Swing review</div>
           <div class="page-subtitle">Your holdings against their support and resistance zones</div></div>
         ${held.available ? `<div class="header-meta">Read from Kite ${App.esc(held.fetched_at.slice(0, 16).replace('T', ' '))}</div>` : ''}
@@ -255,7 +264,7 @@
     body.innerHTML = shown.length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Stock</th><th class="sw-left">Type</th>
       <th class="sw-left">Condition</th><th class="sw-left">Order</th><th class="sw-left">Status</th><th class="sw-left">Created</th><th class="sw-left">Expires</th></tr></thead>
       <tbody>${shown.map((r) => `<tr>
-        <td>${['NSE', 'BSE', 'INDICES'].includes(r.exchange) ? `<a href="${link(r.symbol)}">${App.esc(r.symbol)}</a>` : App.esc(r.symbol)}</td>
+        <td>${['NSE', 'BSE', 'INDICES'].includes(r.exchange) ? `<a href="${link(r.symbol, ORDERS)}">${App.esc(r.symbol)}</a>` : App.esc(r.symbol)}</td>
         <td class="sw-left"><span class="sw-pill ${pill[r.kind]}">${r.kind === 'alert' ? 'Alert' : r.kind.toUpperCase()}</span></td>
         <td class="sw-left">${App.esc(r.condition)}${r.name ? `<div class="muted sw-small">${App.esc(r.name)}</div>` : ''}</td>
         <td class="sw-left">${r.orders.map(App.esc).join('<br>') || '—'}</td>
@@ -270,7 +279,7 @@
     const token = renderId;
     const out = await getOrders(force);
     if (token !== renderId) return;
-    const head = `<div class="page-header">
+    const head = `${crumbs(HOME, ['Orders'])}<div class="page-header">
         <div><div class="page-title"><i class="fa-solid fa-layer-group"></i>Swing review</div>
           <div class="page-subtitle">Your GTTs, ATOs and alerts on Kite. Read-only: manage them in Kite</div></div>
         <div class="header-meta">${out.as_of ? `Read from Kite at ${App.timeOf(out.as_of)}` : ''}
@@ -298,63 +307,6 @@
     el.querySelector('#sw-orders-refresh').addEventListener('click', () => renderOrders(el, true));
   }
 
-  // ── charts page: pick a list, then step through its charts ──
-  async function renderCharts(el, symbol) {
-    el.innerHTML = '<div class="section-card"><div class="skeleton" style="height:160px"></div></div>';
-    const token = renderId;
-    const [ov, hd, od] = await Promise.all([App.api('swing/overview'), App.api('swing/holdings'), getOrders().catch(() => null)]);
-    if (token !== renderId) return;
-    if (!ov.available) {
-      el.innerHTML = tabs('charts') + App.emptyState('fa-chart-column', 'No scan yet', 'Run <code>algo swing scan</code> first.');
-      return;
-    }
-    const indices = ov.sectors.map((s) => s.symbol);
-    const stocks = ov.stocks.map((s) => s.symbol);
-    const heldSymbols = chartable(hd);
-    const withOrders = [...new Set((od?.rows || []).filter((r) => r.active && ['NSE', 'BSE', 'INDICES'].includes(r.exchange)).map((r) => r.symbol))].sort();
-    const known = new Set([...indices, ...stocks, ...heldSymbols, ...withOrders]);
-    const groups = [['indices', 'All indices', indices], ['holdings', 'Holdings', heldSymbols], ['orders', 'With orders or alerts', withOrders],
-      ['stocks', 'All liquid stocks', stocks],
-      ...indices.map((n) => [`index:${n}`, `Stocks in ${n}`, ov.stocks.filter((s) => s.indices.includes(n)).map((s) => s.symbol)])];
-    let group = groups.find((g) => g[0] === list.chartGroup) || groups[0];
-    if (symbol && !group[2].includes(symbol)) group = groups.find((g) => g[2].includes(symbol)) || group;
-    list.chartGroup = group[0];
-    const names = group[2];
-    const current = symbol || names[0];
-    const at = names.indexOf(current);
-    const go = (s) => { if (s) location.hash = `#/swing/charts/${encodeURIComponent(s)}`; };
-    el.innerHTML = `
-      <div class="page-header"><div><div class="page-title"><i class="fa-solid fa-layer-group"></i>Swing review</div>
-        <div class="page-subtitle">Pick a list, then step through its charts</div></div></div>
-      ${tabs('charts')}
-      <div class="top-bar">
-        <div class="top-bar-group">
-          <select class="input-field" id="sw-chart-group" aria-label="List">${groups.map(([k, label, n]) =>
-            `<option value="${App.esc(k)}"${k === group[0] ? ' selected' : ''}>${App.esc(label)} (${n.length})</option>`).join('')}</select>
-          <input class="input-field" id="sw-chart-find" list="sw-chart-names" placeholder="Go to a symbol" aria-label="Go to a symbol" />
-          <datalist id="sw-chart-names">${[...known].sort().map((s) => `<option value="${App.esc(s)}"></option>`).join('')}</datalist>
-        </div>
-        <div class="top-bar-group date-nav">
-          <button class="btn-icon-box" id="sw-chart-prev" title="Previous" aria-label="Previous"${at > 0 ? '' : ' disabled'}><i class="fa-solid fa-chevron-left"></i></button>
-          <span class="muted">${names.length ? `${at + 1} of ${names.length}` : 'Empty list'}</span>
-          <button class="btn-icon-box" id="sw-chart-next" title="Next" aria-label="Next"${at >= 0 && at < names.length - 1 ? '' : ' disabled'}><i class="fa-solid fa-chevron-right"></i></button>
-        </div>
-      </div>
-      <div id="sw-chart-one"></div>`;
-    el.querySelector('#sw-chart-group').addEventListener('change', (e) => {
-      list.chartGroup = e.target.value;
-      const first = groups.find((g) => g[0] === e.target.value)?.[2][0];
-      if (first) go(first); else App.navigate('#/swing/charts');
-    });
-    el.querySelector('#sw-chart-find').addEventListener('change', (e) => { const s = e.target.value.trim().toUpperCase(); if (known.has(s)) go(s); });
-    el.querySelector('#sw-chart-prev').addEventListener('click', () => go(names[at - 1]));
-    el.querySelector('#sw-chart-next').addEventListener('click', () => go(names[at + 1]));
-    if (current) await renderStock(el.querySelector('#sw-chart-one'), current, { embedded: true });
-    else el.querySelector('#sw-chart-one').innerHTML = '<p class="muted sw-pad">This list is empty.</p>';
-  }
-
-  const chartable = (hd) => (hd?.rows || []).filter((r) => r.chart).map((r) => r.symbol);
-
   // ── index page: its stocks, placed at the last price ──
   const MEMBER_COLS = [['Stock', 'symbol'], ['Industry', 'industry'], ['Price', 'price', 1], ['Since scan', 'change_pct', 1], ['Position', 'position'],
     ['In zone', 'zone'], ['Support', 'support_atr', 1], ['ATR away', 'support_atr', 1], ['Resistance', 'resistance_atr', 1], ['ATR away', 'resistance_atr', 1]];
@@ -379,7 +331,7 @@
       </div>
       ${rows.length ? `<div class="table-wrap"><table class="data-table clickable" id="sw-member-table"><thead>${header(MEMBER_COLS, list.memberSort)}</thead>
       <tbody>${ordered.map((r) => `<tr data-symbol="${App.esc(r.symbol)}">
-        <td><a href="${link(r.symbol)}">${App.esc(r.symbol)}</a></td><td class="sw-left muted">${App.esc(r.industry)}</td>
+        <td><a href="${link(r.symbol, link(members.index))}">${App.esc(r.symbol)}</a></td><td class="sw-left muted">${App.esc(r.industry)}</td>
         <td>${App.num(r.price)}</td><td>${change(r.change_pct)}</td><td class="sw-left">${position(r.position)}</td>
         <td class="sw-left">${range(r.zone)}</td><td>${range(r.support)}</td><td>${atr(r.support_atr)}</td><td>${range(r.resistance)}</td><td>${atr(r.resistance_atr)}</td>
       </tr>`).join('')}</tbody></table></div>` : '<p class="muted sw-pad">No stocks in this position.</p>'}`;
@@ -388,7 +340,7 @@
     if (!table) return;
     bindSort(table, 'memberSort', drawMembers);
     table.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', (e) => {
-      if (!e.target.closest('a')) location.hash = link(tr.dataset.symbol);
+      if (!e.target.closest('a')) location.hash = link(tr.dataset.symbol, link(members.index));
     }));
   }
 
@@ -409,8 +361,8 @@
   // Lightweight Charts has no price bands, so this primitive paints the zones and the volume at
   // price behind the candles.
   class ZoneBands {
-    constructor(zones, profile) { this.zones = zones; this.profile = profile; this.showProfile = true; }
-    attached({ series, requestUpdate }) { this.series = series; this.requestUpdate = requestUpdate; }
+    constructor(zones, profile) { this.zones = zones; this.profile = profile; this.showProfile = true; this.events = []; }
+    attached({ chart: owner, series, requestUpdate }) { this.chart = owner; this.series = series; this.requestUpdate = requestUpdate; }
     detached() { this.series = null; }
     updateAllViews() {}
     paneViews() { return [this]; }
@@ -440,6 +392,23 @@
           ctx.fillStyle = `rgba(${rgb}, 0.95)`;
           ctx.fillText(`${App.num(z.lo)}–${App.num(z.hi)}`, 6 * hr, (y1 + y2) / 2);
         }
+        ctx.strokeStyle = ctx.fillStyle = EVENT_COLOUR;
+        ctx.lineWidth = Math.max(1, hr);
+        ctx.setLineDash([4 * hr, 3 * hr]);
+        ctx.textBaseline = 'top';
+        for (const ev of this.events) {
+          const x = this.chart?.timeScale().timeToCoordinate(ev.time);
+          if (x === null || x === undefined) continue;
+          ctx.beginPath();
+          ctx.moveTo(x * hr, 0);
+          ctx.lineTo(x * hr, bitmapSize.height);
+          ctx.stroke();
+          const nearEdge = x * hr > bitmapSize.width * 0.85;      // the label goes to the line's left there
+          ctx.textAlign = nearEdge ? 'right' : 'left';
+          ctx.fillText(ev.label, x * hr + (nearEdge ? -4 : 4) * hr, 4 * vr);
+        }
+        ctx.textAlign = 'left';
+        ctx.setLineDash([]);
       });
     }
   }
@@ -471,7 +440,12 @@
         return out;
       } });
     const rows = s[view];
-    candles.setData(rows.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
+    // A results date lands on its bar; one after the last bar gets an empty slot to sit on.
+    const lastBar = rows[rows.length - 1].time;
+    const results = state.showEvents ? s.timeline.filter((t) => t.kind === 'results' && t.day >= rows[0].time) : [];
+    bands.events = results.map((t) => ({ time: rows.find((c) => c.time >= t.day)?.time || t.day, label: 'Results' }));
+    const ahead = [...new Set(bands.events.map((e) => e.time).filter((t) => t > lastBar))].sort().map((time) => ({ time }));
+    candles.setData([...rows.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })), ...ahead]);
     candles.priceScale().applyOptions({ scaleMargins: { top: 0.05, bottom: s.is_index ? 0.05 : 0.2 } });
     if (!s.is_index) {
       const volume = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: '', lastValueVisible: false, priceLineVisible: false });
@@ -523,8 +497,10 @@
       box.innerHTML = '<span class="muted" title="Log in to Kite to see your orders here">Orders: log in</span>';
       return;
     }
-    state.levels = out.rows.filter((r) => r.active && r.symbol === s.symbol)
-      .flatMap((r) => r.levels.map((l) => ({ ...l, kind: r.kind })));
+    const mine = out.rows.filter((r) => r.active && r.symbol === s.symbol);
+    state.levels = mine.flatMap((r) => r.levels.map((l) => ({ ...l, kind: r.kind })));
+    drawTimeline(s, mine.filter((r) => r.created).map((r) => ({ day: r.created.slice(0, 10), kind: 'order',
+      title: `${r.kind === 'alert' ? 'Alert' : r.kind.toUpperCase()} set: ${r.condition}`, detail: r.orders.join(', ') })));
     state.showOrders = App.prefs.get('swing.chartOrders', true);
     box.innerHTML = `<label class="sw-check"><input type="checkbox" id="sw-orders"${state.showOrders ? ' checked' : ''}${
       state.levels.length ? '' : ' disabled'} />Orders and alerts (${state.levels.length})</label>`;
@@ -536,7 +512,26 @@
     if (state.showOrders && state.levels.length) redraw();   // no zoom to keep yet: the chart has just opened
   }
 
-  async function renderStock(el, symbol, { embedded = false } = {}) {
+  const TIMELINE_ICON = { results: 'fa-file-lines', hold: 'fa-shield-halved', break: 'fa-bolt', order: 'fa-bell' };
+
+  function drawTimeline(s, orderItems = []) {
+    const box = document.getElementById('sw-timeline');
+    if (!box) return;
+    const all = [...s.timeline, ...orderItems].sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
+    const ahead = all.filter((t) => t.day >= s.today).reverse();
+    const past = all.filter((t) => t.day < s.today);
+    const item = (t) => `<li class="sw-t-${t.kind}"><i class="fa-solid ${TIMELINE_ICON[t.kind]}"></i>
+      <span class="sw-t-day">${App.esc(t.day)}</span><span>${App.esc(t.title)}${t.detail ? `<div class="muted sw-small">${App.esc(t.detail)}</div>` : ''}</span></li>`;
+    box.innerHTML = `<div class="section-title sw-gap">Timeline</div>
+      <div class="sw-t-cols">
+        <div><div class="stat-label sw-gap">Coming up</div>${ahead.length ? `<ul class="sw-t-list">${ahead.map(item).join('')}</ul>`
+          : '<p class="muted sw-small">No upcoming results stored for this stock.</p>'}</div>
+        <div><div class="stat-label sw-gap">Last 12 months</div>${past.length ? `<ul class="sw-t-list sw-t-scroll">${past.map(item).join('')}</ul>`
+          : '<p class="muted sw-small">Nothing in the last 12 months.</p>'}</div>
+      </div>`;
+  }
+
+  async function renderStock(el, symbol, { parent = null } = {}) {
     el.innerHTML = '<div class="section-card"><div class="skeleton" style="height:420px"></div></div>';
     const token = renderId;
     let s;
@@ -548,13 +543,14 @@
       return;
     }
     if (token !== renderId) return;
+    const indexLinks = s.indices.map((n) => `<a href="${link(s.symbol, link(n))}">${App.esc(n)}</a>`).join(', ');
     const facts = (s.is_index ? App.esc(s.kind === 'theme' ? 'Theme index' : 'Sector index')
-      : `${App.esc(s.industry) || 'Outside the universe'} · ${s.indices.map(App.esc).join(', ') || 'no index'} · ₹${App.num(s.traded_cr, 0)} crore a day`)
+      : `${App.esc(s.industry) || 'Outside the universe'} · ${indexLinks || 'no index'} · ₹${App.num(s.traded_cr, 0)} crore a day`)
       + (s.held ? ` · you hold ${s.held.quantity} at ₹${App.num(s.held.average)}` : '');
     el.innerHTML = `
+      ${crumbs(HOME, ...(parent ? [parent] : []), [s.symbol])}
       <div class="page-header">
-        <div>${embedded ? '' : '<a class="sw-back" href="#/swing"><i class="fa-solid fa-arrow-left"></i>Swing review</a>'}
-          <div class="page-title">${App.esc(s.symbol)}</div>
+        <div><div class="page-title">${App.esc(s.symbol)}</div>
           <div class="page-subtitle">${facts}</div></div>
         <div class="sw-price"><div class="sw-close">${App.num(s.close)}</div>
           <div>${change(s.week_pct)} week · ${change(s.month_pct)} month · ATR ${App.num(s.atr)}</div>
@@ -570,6 +566,7 @@
           </div>
           <div class="top-bar-group">
             <span id="sw-orders-toggle"></span>
+            ${s.timeline.some((t) => t.kind === 'results') ? '<label class="sw-check"><input type="checkbox" id="sw-events" checked />Results</label>' : ''}
             <label class="sw-check"><input type="checkbox" id="sw-pivots" checked />Pivots</label>
             ${s.profile.length ? '<label class="sw-check"><input type="checkbox" id="sw-profile" checked />Volume at price</label>' : ''}
             <span class="sw-key"><i class="sw-sw sw-bg-sup"></i>support<i class="sw-sw sw-bg-res"></i>resistance<i class="sw-sw sw-bg-flip"></i>flipped<i class="sw-sw sw-bg-in"></i>price inside</span>
@@ -578,7 +575,8 @@
         <div class="sw-legend" id="sw-legend"></div>
         <div id="sw-chart" class="sw-chart"></div>
       </div>
-      ${s.is_index ? '<div class="section-card" id="sw-members"><div class="skeleton" style="height:120px"></div></div>' : ''}
+      ${s.is_index ? '<div class="section-card" id="sw-members"><div class="skeleton" style="height:120px"></div></div>'
+        : '<div class="section-card" id="sw-timeline"></div>'}
       ${s.zones.length ? `<div class="section-card">
         <div class="section-title sw-gap">Zones</div>
         <div class="table-wrap"><table class="data-table"><thead><tr><th>Zone</th><th class="sw-left">Role</th><th>Held as support</th>
@@ -590,7 +588,7 @@
             <td class="sw-left">${b ? `${b.day} ${b.way}` : '—'}</td><td class="sw-left">${App.esc(z.confluence.join(', ')) || '—'}</td></tr>`;
         }).join('')}</tbody></table></div></div>` : ''}`;
     const bands = new ZoneBands(s.zones, s.profile);
-    const state = { view: 'daily', pivots: true, showOrders: false, levels: [] };
+    const state = { view: 'daily', pivots: true, showOrders: false, levels: [], showEvents: true };
     const redraw = (keepZoom = false) => drawChart(s, state, bands, keepZoom);
     redraw();
     el.querySelectorAll('.sw-view').forEach((b) => b.addEventListener('click', () => {
@@ -599,21 +597,24 @@
       redraw();
     }));
     el.querySelector('#sw-pivots').addEventListener('change', (e) => { state.pivots = e.target.checked; redraw(true); });
+    el.querySelector('#sw-events')?.addEventListener('change', (e) => { state.showEvents = e.target.checked; redraw(); });
+    drawTimeline(s);
     el.querySelector('#sw-profile')?.addEventListener('change', (e) => { bands.showProfile = e.target.checked; bands.requestUpdate?.(); });
     loadChartOrders(s, state, redraw, token);
     if (s.is_index) loadMembers(s.symbol, token);
   }
 
-  const TITLES = { holdings: 'Holdings · Swing', orders: 'Orders · Swing', charts: 'Charts · Swing' };
+  const TITLES = { holdings: 'Holdings · Swing', orders: 'Orders · Swing' };
   App.page('swing', {
-    title: (args) => TITLES[args[0]] || (args[0] ? `${args[0]} · Swing` : 'Swing review'),
+    title: (args) => (args[1] ? `${args[1]} · Swing` : TITLES[args[0]] || (args[0] ? `${args[0]} · Swing` : 'Swing review')),
     render: (el, args) => {
       renderId += 1;
       members = null;
-      if (args[0] === 'holdings') return renderHoldings(el);
-      if (args[0] === 'orders') return renderOrders(el);
-      if (args[0] === 'charts') return renderCharts(el, args[1]);
-      return args[0] ? renderStock(el, args[0]) : renderList(el);
+      const [first, second] = args;
+      if (first === 'holdings') return second ? renderStock(el, second, { parent: ['Holdings', HOLDINGS] }) : renderHoldings(el);
+      if (first === 'orders') return second ? renderStock(el, second, { parent: ['Orders', ORDERS] }) : renderOrders(el);
+      if (second) return renderStock(el, second, { parent: [first, link(first)] });
+      return first ? renderStock(el, first) : renderList(el);
     },
     destroy: () => { stopTimers(); removeChart(); },
   });

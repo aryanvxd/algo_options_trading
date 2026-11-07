@@ -14,7 +14,7 @@ from __future__ import annotations
 import bisect
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from swing.bars import Bars, avg_traded_value_cr, daily_bars, weekly
@@ -23,16 +23,18 @@ from swing.holdings import load as load_holdings
 from swing.overview import place, row_for
 from swing.settings import load_swing_config
 from swing.universe import load_swing_universe
-from swing.zones import Zone, find_zones, volume_profile
-from trading_core.clock import Clock
+from swing.zones import Zone, ZoneReport, find_zones, volume_profile
+from trading_core.clock import IST, Clock
 from trading_core.config import PlatformConfig, load_secrets
 from trading_core.db.engine import Database
 from trading_core.kite.auth import NotLoggedIn
 from trading_core.kite.client import KiteClient
+from trading_core.market import events as calendar_events
 from trading_core.marketdata.store import MarketStore
 
 log = logging.getLogger(__name__)
 PROFILE_BIN = 5                          # volume-profile bins of 0.1 ATR per bar drawn: 0.5 ATR
+TIMELINE_DAYS = 365
 NOT_LOGGED_IN = "Not logged in to Kite today. Run `algo login`."
 
 
@@ -82,6 +84,26 @@ def _profile(b: Bars, atr: float) -> list[dict[str, float]]:
 
 def holdings(platform: PlatformConfig) -> dict[str, Any]:
     return load_holdings(platform)
+
+
+def timeline(db: Database, symbol: str, rep: ZoneReport, today: date) -> list[dict[str, Any]]:
+    """Results dates from the market calendar, then the last year's zone holds and breaks; newest
+    first. The page adds the orders, which are read live."""
+    start = datetime.combine(today - timedelta(days=TIMELINE_DAYS), time(0), tzinfo=IST)
+    end = datetime.combine(today + timedelta(days=TIMELINE_DAYS), time(0), tzinfo=IST)
+    items = []
+    for e in calendar_events.between(db, start, end, category="results", symbols=[symbol]):
+        items.append({"day": e.ts.date().isoformat(), "kind": "results", "title": "Results",
+                      "detail": (e.detail or {}).get("description") or ""})
+    since = today - timedelta(days=TIMELINE_DAYS)
+    for z in rep.zones:
+        band = f"{z.lo:,.2f}–{z.hi:,.2f}"
+        items += [{"day": t.day.isoformat(), "kind": "hold", "title": f"Held as {t.side} at {band}",
+                   "detail": f"Moved {t.departure_atr:.1f} ATR away" if t.departure_atr else ""}
+                  for t in z.touches if t.day >= since]
+        items += [{"day": d.isoformat(), "kind": "break", "title": f"Broke {way} through {band}", "detail": ""}
+                  for d, way in z.breaks if d >= since]
+    return sorted(items, key=lambda i: i["day"], reverse=True)
 
 
 def index_stocks(platform: PlatformConfig, name: str, client: KiteClient | None, now: datetime) -> dict[str, Any] | None:
@@ -163,7 +185,7 @@ def orders(client: KiteClient | None, now: datetime) -> dict[str, Any]:
     return {"available": True, "as_of": now.isoformat(timespec="seconds"), "rows": rows, "errors": errors}
 
 
-def stock(platform: PlatformConfig, symbol: str) -> dict[str, Any] | None:
+def stock(db: Database, platform: PlatformConfig, symbol: str, today: date) -> dict[str, Any] | None:
     """Candles, zones and volume at price of a symbol with stored candles: a stock or index in the
     universe, a holding, or a stock with a GTT, ATO or alert. None if there are none."""
     cfg = load_swing_config()
@@ -191,6 +213,7 @@ def stock(platform: PlatformConfig, symbol: str) -> dict[str, Any] | None:
             "week_pct": row.week_pct if row else None, "month_pct": row.month_pct if row else None,
             "position": row.position if row else None, "traded_cr": None if is_index else round(avg_traded_value_cr(bars), 1),
             "held": {"quantity": held["quantity"], "average": held["average"]} if held else None,
-            "note": NOTE, "zones_note": rep.note, "daily": _candles(shown), "weekly": _candles(wk),
+            "note": NOTE, "zones_note": rep.note, "today": today.isoformat(), "timeline": timeline(db, symbol, rep, today),
+            "daily": _candles(shown), "weekly": _candles(wk),
             "zones": [_zone(z, wk.dates) for z in sorted(rep.zones, key=lambda z: -z.hi)],
             "profile": _profile(shown, rep.atr) if rep.atr else []}

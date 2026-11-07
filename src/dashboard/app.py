@@ -209,7 +209,7 @@ def create_app(db: Database, clock: Clock | None = None, platform: PlatformConfi
 
     @app.get("/api/swing/stock/{symbol}")
     def api_swing_stock(symbol: str):
-        out = swing_queries.stock(platform, symbol)
+        out = swing_queries.stock(db, platform, symbol, clock.today())
         if out is None:
             raise HTTPException(404, f"no candles for {symbol!r}: run `algo swing scan`")
         return out
