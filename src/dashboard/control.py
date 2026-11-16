@@ -12,17 +12,22 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from trading_core.config import PlatformConfig
+from trading_core.config import PlatformConfig, load_secrets
 from trading_core.db.engine import Database
 from trading_core.db.repo import Journal
-from trading_core.kite.auth import load_active_session
+from trading_core.kite.auth import check_token, load_active_session
 from trading_core.strategy import registry
 
 Launcher = Callable[[list[str], Path, str], Any]
+
+TOKEN_CHECK_EVERY_S = 60     # the pages poll every few seconds; Kite is asked far less often
+_check_lock = threading.Lock()
+_last_check: tuple[str, datetime, bool | None] | None = None
 
 
 class ControlError(Exception):
@@ -72,10 +77,30 @@ def running(platform: PlatformConfig, algo_id: str) -> dict[str, Any] | None:
     return info if isinstance(info.get("pid"), int) and _alive(info["pid"]) else None
 
 
+# ---------------------------------------------------------------- does Kite accept the token?
+
+def token_accepted(platform: PlatformConfig, token: str, now: datetime) -> bool | None:
+    """True or False from Kite, or None if it couldn't be asked. A new login is a new token, so it
+    is checked at once."""
+    global _last_check
+    with _check_lock:
+        if _last_check and _last_check[0] == token and (now - _last_check[1]).total_seconds() < TOKEN_CHECK_EVERY_S:
+            return _last_check[2]
+        try:
+            accepted = check_token(load_secrets(platform.root).api_key, token)
+        except RuntimeError:                                      # no API key in .env
+            accepted = None
+        _last_check = (token, now, accepted)
+        return accepted
+
+
 # ---------------------------------------------------------------- status
 
 def status(platform: PlatformConfig, db: Database, now: datetime) -> dict[str, Any]:
     session = load_active_session(db, now)
+    accepted = token_accepted(platform, session.access_token, now) if session else None
+    if accepted is False:                                         # in date, but Kite has dropped it
+        session = None
     journal = Journal(db)
     algos = {}
     for algo_id in registry.available():
@@ -107,7 +132,8 @@ def status(platform: PlatformConfig, db: Database, now: datetime) -> dict[str, A
             square_off=f"{sched.square_off:%H:%M}")
     return dict(now=now.isoformat(), kite=dict(logged_in=session is not None,
                                                valid_until=session.valid_until.isoformat() if session else None,
-                                               user_id=session.user_id if session else None),
+                                               user_id=session.user_id if session else None,
+                                               verified=accepted is True, rejected=accepted is False),
                 algos=algos)
 
 

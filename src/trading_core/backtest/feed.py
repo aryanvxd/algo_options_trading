@@ -30,8 +30,15 @@ class OptionSpec:
 
 
 def half_spread(price: float) -> float:
-    """Half the bid-ask spread on real candles: the median measured in the recorded ticks."""
-    return 0.025 if price < 5 else 0.05 if price < 40 else 0.1 if price < 100 else 0.5
+    """Half the bid-ask spread on real candles: the median measured in the recorded ticks.
+
+    11 Nov 2026, from ~1.2M recorded NIFTY quotes over 29 Oct, 3 Nov and 11 Nov, full spread by price:
+    ₹100-150 0.30, ₹150-200 0.40-0.45, ₹200-300 0.50-0.65, above ₹300 1.45-2.70. One 0.5 half-spread
+    for everything above ₹100 made a ₹120-200 option 1.0 wide, which blocked every ATM buy (the
+    directional scalp allows 0.5) and over-charged the condor's short legs."""
+    if price < 100:
+        return 0.025 if price < 5 else 0.05 if price < 40 else 0.1
+    return 0.15 if price < 150 else 0.2 if price < 200 else 0.3 if price < 300 else 1.0
 
 
 def _round05(x: float) -> float:
@@ -125,11 +132,33 @@ class BacktestFeed(MarketFeed):
         i = bisect_right(b.minutes, now.hour * 60 + now.minute - 1) - 1 if b is not None else -1
         if i < 0:
             return None
-        mid = float(b.close[i])
-        half = half_spread(mid)
-        return Tick(token, ltp=mid, bid=max(0.05, round(mid - half, 2)), ask=round(mid + half, 2),
-                    ts=now.replace(second=0, microsecond=0), received_at=now, bid_qty=1000, ask_qty=1000,
-                    oi=int(b.oi[i]) if b.oi is not None else None)
+        return _real_quote(token, float(b.close[i]), now, int(b.oi[i]) if b.oi is not None else None)
+
+    def minute_path(self, token: int, now: datetime) -> list[Tick] | None:
+        """The real candle of the minute that just finished, as quotes at the four points of the
+        index's path that minute: open, the index's first extreme, its second, close. At the index's
+        high a CE stands at its high and a PE at its low, and the other way round at the index's low,
+        so all legs of a position move together as they do live.
+
+        Each leg's own OHLC order is not used: when a CE and a PE both close below their open, it
+        puts both at their lows at once, a moment that never happened (13 Nov 2026: a +₹819 condor
+        peak at 10:07 that live never saw; live's best that minute was +₹468)."""
+        b = self.real.get(token) if self.real is not None else None
+        spec = self.options.get(token)
+        if b is None or spec is None:
+            return None
+        m = now.hour * 60 + now.minute - 1
+        i = bisect_right(b.minutes, m) - 1
+        idx = self.bars[self.index_token]
+        j = bisect_right(idx.minutes, m) - 1
+        if i < 0 or b.minutes[i] != m or j < 0 or idx.minutes[j] != m:   # no trade that minute
+            return None
+        o, h, l, c = (float(x) for x in (b.open[i], b.high[i], b.low[i], b.close[i]))
+        at_index_low, at_index_high = (l, h) if spec.opt == "CE" else (h, l)
+        low_first = idx.close[j] >= idx.open[j]         # the index's own order: see _path
+        first, second = (at_index_low, at_index_high) if low_first else (at_index_high, at_index_low)
+        oi = int(b.oi[i]) if b.oi is not None else None
+        return [_real_quote(token, p, now, oi) for p in (o, first, second, c)]
 
     def _option_tick(self, token: int, now: datetime) -> Tick | None:
         if self.real is not None:
@@ -153,6 +182,12 @@ class BacktestFeed(MarketFeed):
         bid = max(0.05, _round05(mid - half))
         return Tick(token, ltp=mid, bid=bid, ask=_round05(mid + half), ts=spot_t.ts, received_at=now,
                     bid_qty=1000, ask_qty=1000)
+
+
+def _real_quote(token: int, mid: float, now: datetime, oi: int | None) -> Tick:
+    half = half_spread(mid)
+    return Tick(token, ltp=mid, bid=max(0.05, round(mid - half, 2)), ask=round(mid + half, 2),
+                ts=now.replace(second=0, microsecond=0), received_at=now, bid_qty=1000, ask_qty=1000, oi=oi)
 
 
 def _last_close_of(b: Bars, minute: int) -> float | None:

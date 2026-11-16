@@ -4,6 +4,7 @@ from datetime import datetime, time, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from kiteconnect import exceptions as kex
 
 from dashboard import control
 from dashboard.app import create_app
@@ -11,6 +12,7 @@ from tests.algos.strangle_scalp.test_scalp_replay import DAY, burst, run, seed
 from trading_core.clock import IST, SimClock, ist
 from trading_core.db import models as m
 from trading_core.db.repo import Journal
+from trading_core.kite import auth
 from trading_core.reporting.daily_report import report_dir
 
 WRITE = {"X-Algo-Desk": "1"}
@@ -97,6 +99,69 @@ def test_writes_need_the_dashboard_header_and_a_local_origin(app_at):
 def test_login_opens_algo_login(app_at, launched):
     assert app_at(MONDAY_0930).post("/api/kite/login", headers=WRITE).status_code == 200
     assert launched == [(["login"], "AlgoDesk-login")]
+
+
+# ---------------------------------------------------------------- does Kite accept the token?
+
+def test_a_token_kite_rejects_counts_as_logged_out(app_at, db, launched, monkeypatch):
+    monkeypatch.setattr(control, "check_token", lambda key, token: False)
+    logged_in(db, MONDAY_0930)
+    client = app_at(MONDAY_0930)
+    st = client.get("/api/control").json()
+    assert st["kite"]["rejected"] and not st["kite"]["logged_in"] and not st["kite"]["verified"]
+    assert st["algos"]["strangle_scalp"]["start_blocked"] == "log in to Kite first"
+    assert client.post("/api/strategies/strangle_scalp/start", headers=WRITE).status_code == 409 and launched == []
+
+
+def test_kite_out_of_reach_keeps_the_session_but_not_verified(app_at, db, monkeypatch):
+    monkeypatch.setattr(control, "check_token", lambda key, token: None)
+    logged_in(db, MONDAY_0930)
+    st = app_at(MONDAY_0930).get("/api/control").json()
+    assert st["kite"]["logged_in"] and not st["kite"]["verified"] and not st["kite"]["rejected"]
+    assert st["algos"]["strangle_scalp"]["can_start"]
+
+
+def test_no_api_key_means_not_verified(app_at, db, monkeypatch):
+    def no_key(root):
+        raise RuntimeError("KITE_API_KEY missing")
+
+    monkeypatch.setattr(control, "load_secrets", no_key)
+    logged_in(db, MONDAY_0930)
+    kite = app_at(MONDAY_0930).get("/api/control").json()["kite"]
+    assert kite["logged_in"] and not kite["verified"]
+
+
+def test_kite_is_asked_once_a_minute_and_at_once_after_a_new_login(app_at, db, monkeypatch):
+    asked = []
+    monkeypatch.setattr(control, "check_token", lambda key, token: asked.append(token) or True)
+    logged_in(db, MONDAY_0930)
+    for seconds in (0, 5, 59):
+        app_at(MONDAY_0930 + timedelta(seconds=seconds)).get("/api/control")
+    assert asked == ["t"]
+    app_at(MONDAY_0930 + timedelta(seconds=60)).get("/api/control")
+    assert asked == ["t", "t"]
+    with db.session() as s:
+        s.add(m.BrokerSession(user_id="AB1234", access_token="new", login_at=MONDAY_0930 + timedelta(seconds=61),
+                              valid_until=MONDAY_0930 + timedelta(hours=12)))
+    app_at(MONDAY_0930 + timedelta(seconds=62)).get("/api/control")
+    assert asked == ["t", "t", "new"]
+
+
+@pytest.mark.parametrize("error, expected", [(None, True), (kex.TokenException("expired"), False),
+                                             (ConnectionError("no network"), None),
+                                             (kex.NetworkException("gateway"), None)])
+def test_check_token_only_calls_a_token_error_rejected(monkeypatch, error, expected):
+    class FakeKite:
+        def __init__(self, **kwargs):
+            pass
+
+        def profile(self):
+            if error:
+                raise error
+            return {}
+
+    monkeypatch.setattr("kiteconnect.KiteConnect", FakeKite)
+    assert auth.check_token("key", "token") is expected
 
 
 # ---------------------------------------------------------------- stale commands

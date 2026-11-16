@@ -31,6 +31,9 @@
   const today = () => App.meta?.today || App.isoDate(new Date());
   const info = (id) => (App.meta?.strategies || []).find((a) => a.algo_id === id);
   const params = () => ({ mode: st.mode, source: st.source });
+  // Where the panels read from: the live journal, or (App.strategyEmbed) e.g. a backtest's own database.
+  const apiBase = () => st.apiBase || `strategies/${st.algoId}/`;
+  const posBase = () => st.posBase || '';
   const isLiveView = () => st.date === today() && st.source === 'live';
 
   function clearTimers() { timers.forEach(clearInterval); timers = []; }
@@ -49,7 +52,7 @@
     const tab = TABS.some((t) => t[0] === args[1]) ? args[1] : 'today';
     st = {
       algoId, info: a, tab,
-      date: st && st.algoId === algoId ? st.date : today(),
+      date: st && st.algoId === algoId && !st.embedded ? st.date : today(),
       mode: App.prefs.get(`strategy.${algoId}.mode`, 'paper'),
       source: App.prefs.get(`strategy.${algoId}.source`, 'live'),
     };
@@ -181,7 +184,7 @@
     dateNav();
     const day = await App.api(`strategies/${st.algoId}/day`, { date: st.date, ...params() });
     const payoffs = await Promise.all(day.trades.map((t) =>
-      App.api(`positions/${t.position_id}/payoff`).catch(() => null)));
+      App.api(`${posBase()}positions/${t.position_id}/payoff`).catch(() => null)));
     App.destroyCharts();
     if (!day.run) {
       body.innerHTML = App.emptyState('fa-moon', `${App.esc(st.info.name)} did not run on ${App.prettyDate(st.date)}`,
@@ -399,6 +402,7 @@
   // ── notes ────────────────────────────────────────────────────────────────
 
   function notesSection(notes, date, positionId = null) {
+    if (st.notes === false) return '';          // embedded views (backtests) have no journal notes
     const list = notes.filter((n) => positionId === null || n.position_id === positionId).map(noteItem).join('');
     return `<div class="section-card notes-card" data-date="${date}" data-position="${positionId ?? ''}" style="margin-top:16px">
       <div class="card-head"><div><div class="section-title"><i class="fa-solid fa-pen-to-square"></i> Your notes</div>
@@ -466,7 +470,7 @@
   async function loadTrades(body) {
     const { start, end } = rangeControls('log', 90);
     rangeNav('log', `<button class="btn-secondary" id="sp-csv"><i class="fa-solid fa-file-csv"></i>CSV</button>`);
-    const data = await App.api(`strategies/${st.algoId}/trades`, { start, end, ...params() });
+    const data = await App.api(`${apiBase()}trades`, { start, end, ...params() });
     const all = data.trades;
     const reasons = [...new Set(all.map((t) => t.exit_reason).filter(Boolean))];
     const dtes = [...new Set(all.map((t) => t.dte).filter((d) => d !== null && d !== undefined))].sort((a, b) => a - b);
@@ -516,7 +520,7 @@
     const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
-    a.download = `${st.algoId}_trades_${st.logStart}_${st.logEnd}.csv`;
+    a.download = `${st.csvName || st.algoId}_trades_${st.logStart}_${st.logEnd}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
@@ -534,7 +538,7 @@
     wrap.addEventListener('click', (e) => { if (e.target === wrap) closeDetail(); });
     document.addEventListener('keydown', escClose);
     try {
-      const [d, pay] = await Promise.all([App.api(`positions/${positionId}`), App.api(`positions/${positionId}/payoff`).catch(() => null)]);
+      const [d, pay] = await Promise.all([App.api(`${posBase()}positions/${positionId}`), App.api(`${posBase()}positions/${positionId}/payoff`).catch(() => null)]);
       const t = d.trade;
       const fills = d.fills.map((f) => `<tr><td>${App.timeOf(f.time)}</td><td>${f.purpose}</td><td>${App.esc(f.symbol)}</td><td>${f.side}</td>
         <td>${f.qty}</td><td>${f.status === 'COMPLETE' ? App.num(f.price) : App.chip(f.status, 'tone-red')}</td>
@@ -583,7 +587,7 @@
   async function loadJournal(body) {
     const { start, end } = rangeControls('journal', 30);
     rangeNav('journal');
-    const data = await App.api(`strategies/${st.algoId}/journal`, { start, end, ...params() });
+    const data = await App.api(`${apiBase()}journal`, { start, end, ...params() });
     if (!data.days.length) {
       body.innerHTML = App.emptyState('fa-book-open', 'Nothing in this range', 'No runs or notes between these dates.')
         + notesSection([], today());
@@ -635,7 +639,7 @@
       (box) => box.querySelector('#perf-range').addEventListener('click', (e) => {
         const b = e.target.closest('button'); if (!b) return; st.perfDays = Number(b.dataset.v); load(true);
       }));
-    const p = await App.api(`strategies/${st.algoId}/performance`, { days: st.perfDays, ...params() });
+    const p = await App.api(`${apiBase()}performance`, { days: st.perfDays, ...params() });
     App.destroyCharts();
     const s = p.stats;
     const extra = panels[st.algoId]?.performanceNote?.(p) || '';
@@ -717,6 +721,22 @@
         ${r.spec_text.includes('not final') || r.spec_text.includes('proposed') ? App.chip('thresholds not final', 'tone-amber') : ''}</summary>
         <pre class="spec-text">${App.esc(r.spec_text)}</pre></details>` : ''}`;
   }
+
+  // The trade log, trade detail and journal for data other than the live journal, e.g. a backtest
+  // (pages/backtests.js). use() points the panels at it; show() fills #sp-body / #sp-controls like a tab.
+  App.strategyEmbed = {
+    use(opts) {
+      clearTimers();
+      st = { algoId: opts.algoId, info: { name: opts.name || opts.algoId }, tab: 'trades', mode: 'paper', source: 'replay',
+        embedded: true, notes: false, apiBase: opts.apiBase, posBase: opts.posBase, csvName: opts.csvName,
+        logStart: opts.start, logEnd: opts.end, journalStart: opts.start, journalEnd: opts.end };
+    },
+    show(tab) { st.tab = tab; load(true); },
+    journalDay: (d) => journalDay(d),
+    bindDetails(root) { bindNotes(root, null); },
+    groupTable: (...a) => groupTable(...a),
+    close() { clearTimers(); closeDetail(); },
+  };
 
   App.page('strategy', {
     title: (args) => info(args[0])?.name || 'Strategy',

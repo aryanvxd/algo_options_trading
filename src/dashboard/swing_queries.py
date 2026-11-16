@@ -21,7 +21,7 @@ from swing.bars import Bars, avg_traded_value_cr, daily_bars, weekly
 from swing.chart import NOTE
 from swing.holdings import load as load_holdings
 from swing.overview import place, row_for
-from swing.settings import load_swing_config
+from swing.settings import load_user_config
 from swing.universe import load_swing_universe
 from swing.zones import Zone, ZoneReport, find_zones, volume_profile
 from trading_core.clock import IST, Clock
@@ -188,7 +188,7 @@ def orders(client: KiteClient | None, now: datetime) -> dict[str, Any]:
 def stock(db: Database, platform: PlatformConfig, symbol: str, today: date) -> dict[str, Any] | None:
     """Candles, zones and volume at price of a symbol with stored candles: a stock or index in the
     universe, a holding, or a stock with a GTT, ATO or alert. None if there are none."""
-    cfg = load_swing_config()
+    cfg = load_user_config(platform)
     try:
         u = load_swing_universe(platform, cfg.universe)
     except ValueError:
@@ -216,4 +216,15 @@ def stock(db: Database, platform: PlatformConfig, symbol: str, today: date) -> d
             "note": NOTE, "zones_note": rep.note, "today": today.isoformat(), "timeline": timeline(db, symbol, rep, today),
             "daily": _candles(shown), "weekly": _candles(wk),
             "zones": [_zone(z, wk.dates) for z in sorted(rep.zones, key=lambda z: -z.hi)],
-            "profile": _profile(shown, rep.atr) if rep.atr else []}
+            "profile": _profile(shown, rep.atr) if rep.atr else [],
+            "fundamentals": _fundamentals(db, symbol)}
+
+
+def _fundamentals(db: Database, symbol: str) -> dict[str, float]:
+    """The uploaded numbers for one stock (Swing › Fundamentals); empty before the 0006 migration."""
+    from swing import fundamentals
+
+    try:
+        return fundamentals.of(db, [symbol]).get(symbol, {})
+    except Exception:  # noqa: BLE001 - table missing: run `algo db upgrade`
+        return {}

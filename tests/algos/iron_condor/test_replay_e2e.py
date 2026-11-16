@@ -95,6 +95,23 @@ def test_decay_hits_target(platform, db):
     assert pos.exit_time.time() < time(15, 0)
 
 
+def test_day_is_recorded_when_the_trade_closes_not_only_at_the_report(platform, db, monkeypatch):
+    """The process can end between the last exit and the 15:35 report (window closed, laptop asleep):
+    the run must already be DONE with its daily summary, not left "in trade"."""
+    from trading_core.strategy.base import BaseAlgo
+
+    monkeypatch.setattr(BaseAlgo, "report", lambda self: None)       # the report step never happens
+    overrides = {"exits": {**LOOSE["exits"], "target_points": 4.6}}
+    run_id = run(platform, db, overrides, spot=lambda f: 25000.0, decay=lambda f: max(0.05, 1.0 - 2.0 * f))
+
+    pos = one(db, m.Position, run_id=run_id)
+    assert pos.status == "CLOSED" and pos.exit_reason == "TARGET"
+    assert one(db, m.AlgoRun, run_id=run_id).status == "DONE"
+    summary = one(db, m.DailySummary, run_id=run_id)
+    assert summary.traded and summary.exit_reason == "TARGET"
+    assert summary.charges == pytest.approx(pos.charges) and summary.net_pnl == pytest.approx(pos.net_pnl)
+
+
 def test_high_vix_skips_day_without_trading(platform, db):
     run_id = run(platform, db, LOOSE, spot=lambda f: 25000.0, decay=lambda f: 1.0, vix=22.0)
     r = one(db, m.AlgoRun, run_id=run_id)

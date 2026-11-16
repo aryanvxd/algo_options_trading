@@ -133,11 +133,34 @@ def test_api_routes(platform, db, monkeypatch):
     assert client.get("/api/swing/index/NIFTY%20ENERGY/stocks").json()["rows"][0]["position"] == "near support"
 
 
+# The only /api/swing routes that write, and what they write: local state, never Kite.
+LOCAL_WRITES = {
+    ("POST", "/api/swing/scan"),                                   # starts `algo swing scan` (reads Kite)
+    ("PUT", "/api/swing/settings"), ("DELETE", "/api/swing/settings"),            # data/swing/overrides.json
+    ("PUT", "/api/swing/watchlists/{list_id}"),                                    # watchlist tables
+    ("POST", "/api/swing/watchlists/{list_id}/items"), ("DELETE", "/api/swing/watchlists/{list_id}/items/{symbol}"),
+    ("POST", "/api/swing/journal/update"),                                         # swing_picks table
+    ("POST", "/api/swing/fundamentals"), ("DELETE", "/api/swing/fundamentals"),   # fundamentals table
+}
+KITE_WRITES = ("place_order", "modify_order", "cancel_order", "exit_order", "place_gtt", "modify_gtt", "delete_gtt",
+               "create_alert", "modify_alert", "delete_alert", "convert_position")
+
+
 def test_no_route_writes_to_kite(platform, db):
-    """The swing API stays read-only: every /api/swing route is a GET."""
+    """The swing API writes only local state: every non-GET /api/swing route is one of LOCAL_WRITES,
+    and no swing code calls a Kite method that changes anything there."""
     app = create_app(db, platform=platform)
     routes = [r for r in app.routes if getattr(r, "path", "").startswith("/api/swing")]
-    assert len(routes) >= 5 and all(r.methods == {"GET"} for r in routes)
+    writes = {(m, r.path) for r in routes for m in r.methods if m != "GET"}
+    assert len(routes) >= 5 and writes == LOCAL_WRITES
+    from pathlib import Path
+
+    import dashboard
+    import swing
+    sources = list(Path(swing.__file__).parent.glob("*.py")) + list(Path(dashboard.__file__).parent.glob("swing_*.py"))
+    for f in sources:
+        text = f.read_text(encoding="utf-8")
+        assert not [w for w in KITE_WRITES if w in text], f.name
 
 
 class FakeKite:

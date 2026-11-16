@@ -295,7 +295,10 @@ def strategy_day(db: Database, algo_id: str, day: date, mode: str = "paper", sou
             row["carried_out"] = carried_out(p, day, r.status)
             ls = lives.get(manager[p.position_id])
             if p.status in ("OPEN", "OPENING") and ls is not None and ls.gross_pnl is not None:
-                row.update(gross=_r(ls.gross_pnl), net=_r(ls.net_pnl), open=True,
+                # The position row gets its charges only at close; the live net already has entry
+                # charges plus estimated exit charges taken off, so the difference is the charges.
+                charges = ls.gross_pnl - ls.net_pnl if ls.net_pnl is not None else None
+                row.update(gross=_r(ls.gross_pnl), charges=_r(charges), net=_r(ls.net_pnl), open=True,
                            roi_pct=_r((ls.net_pnl or 0) / row["capital"] * 100, 3) if row["capital"] else None)
             trades_out.append(dict(**row, legs=_legs(p), curve=curves.get(p.position_id, [])))
 
@@ -336,6 +339,21 @@ def _tick_mid(s, token: int, at: datetime) -> float | None:
     if t.bid and t.ask:
         return (t.bid + t.ask) / 2
     return t.ltp
+
+
+def _exit_points(exits: dict[str, Any], flat: str, by_dte: str, dte: Any) -> float | None:
+    """A stop or target in points: the flat setting, else the by-DTE table (balanced condor), picked as the
+    algo does: the entry for the largest DTE key at or below the trade's DTE, else the smallest key."""
+    if exits.get(flat) is not None:
+        return float(exits[flat])
+    table = exits.get(by_dte)
+    if not isinstance(table, dict) or not table or dte is None:
+        return None
+    t = {int(k): v for k, v in table.items()}
+    keys = sorted(t)
+    below = [k for k in keys if k <= int(dte)]
+    v = t[below[-1]] if below else t[keys[0]]
+    return float(v) if v is not None else None
 
 
 def position_payoff(db: Database, position_id: int, now: datetime, r: float = 0.065) -> dict[str, Any] | None:
@@ -385,8 +403,11 @@ def position_payoff(db: Database, position_id: int, now: datetime, r: float = 0.
         cfg = run.config_snapshot or {}
         exits = cfg.get("exits") or {}
         qty = min(l.qty for l in legs)
-        stop = -exits["stop_loss_points"] * qty if "stop_loss_points" in exits else None
-        target = exits["target_points"] * qty if "target_points" in exits else None
+        dte = (p.params or {}).get("dte")
+        stop_pts = _exit_points(exits, "stop_loss_points", "stop_by_dte", dte)
+        target_pts = _exit_points(exits, "target_points", "target_by_dte", dte)
+        stop = -stop_pts * qty if stop_pts is not None else None
+        target = target_pts * qty if target_pts is not None else None
         loss = payoff.max_loss(legs)
         return dict(position_id=position_id, structure=p.structure, open=is_open, spots=spots, expiry=expiry_curve,
                     now=t0, breakevens=payoff.breakevens(legs, spots), max_loss=loss,

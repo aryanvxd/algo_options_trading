@@ -145,24 +145,42 @@ const App = (() => {
   // ── router ──
   function page(name, def) { pages[name] = def; }
 
+  // #/compare?runs=a,b -> path "compare", query URLSearchParams("runs=a,b"); pages get the query as
+  // render's third argument.
   function route() {
-    const path = (location.hash.replace(/^#\/?/, '') || 'overview').split('?')[0];
+    const [rawPath, rawQuery = ''] = (location.hash.replace(/^#\/?/, '') || 'overview').split('?');
+    const path = rawPath || 'overview';
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
-    return { path, name: parts[0] || 'overview', args: parts.slice(1) };
+    return { path, name: parts[0] || 'overview', args: parts.slice(1), query: new URLSearchParams(rawQuery) };
+  }
+
+  // A nav button is active on its page and the pages under it, unless data-not names a sub-path
+  // that has its own button (Backtests vs Market data).
+  // data-exact: only its own page and the pages under it named in capitals (Swing › Sectors owns
+  // #/swing/NIFTY%20AUTO but not #/swing/picks, which has its own button).
+  function isActive(b, path) {
+    const p = b.dataset.page;
+    const below = path.startsWith(p + '/');
+    const hit = path === p || (below && (!b.dataset.exact || !/^[a-z]/.test(path.slice(p.length + 1))));
+    const not = b.dataset.not;
+    return hit && !(not && (path === not || path.startsWith(not + '/')));
+  }
+  function markActive(path) {
+    document.querySelectorAll('.nav-btn[data-page]').forEach((b) => b.classList.toggle('active', isActive(b, path)));
   }
 
   async function go() {
-    const { path, name, args } = route();
+    const { path, name, args, query } = route();
     const def = pages[name] || pages.overview;
     if (current?.destroy) current.destroy();
     destroyCharts();
     current = def;
-    document.querySelectorAll('.nav-btn[data-page]').forEach((b) =>
-      b.classList.toggle('active', path === b.dataset.page || path.startsWith(b.dataset.page + '/')));
-    document.title = `${typeof def.title === 'function' ? def.title(args) : def.title} · Algo Desk`;
+    showMenu(SUBMENUS.includes(name) ? name : 'main');
+    markActive(path);
+    document.title = `${typeof def.title === 'function' ? def.title(args, query) : def.title} · Algo Desk`;
     const el = document.getElementById('page');
     el.innerHTML = '';
-    try { await def.render(el, args); }
+    try { await def.render(el, args, query); }
     catch (err) { console.error(err); toast('Could not load the page: ' + err.message, 'error'); }
   }
 
@@ -185,6 +203,61 @@ const App = (() => {
       b.addEventListener('click', () => { location.hash = '#/' + b.dataset.page; }));
   }
 
+  // ── sidebar: two menus (main / a sub-menu such as Backtests) and collapsible sections ──
+  const SUBMENUS = ['backtests', 'swing'];          // a route whose first part is one of these shows its sub-menu
+
+  function showMenu(which) {
+    const box = document.getElementById('sidebar-menus');
+    if (!box || box.dataset.menu === which) return;
+    box.dataset.menu = which;
+    // Only the menu on screen is reachable by keyboard and screen readers.
+    box.querySelectorAll('.menu').forEach((m) => {
+      const on = m.classList.contains('menu-' + which);
+      m.toggleAttribute('inert', !on);
+      m.setAttribute('aria-hidden', on ? 'false' : 'true');
+    });
+  }
+
+  function initSections() {
+    document.querySelectorAll('.nav-group[data-group]').forEach((g) => {
+      const key = 'nav.open.' + g.dataset.group;
+      const head = g.querySelector('.nav-section');
+      const set = (open) => { g.classList.toggle('closed', !open); head.setAttribute('aria-expanded', String(open)); };
+      set(prefs.get(key, true));
+      head.addEventListener('click', () => {
+        const open = g.classList.contains('closed');
+        set(open);
+        prefs.set(key, open);
+      });
+    });
+  }
+
+  // Recent runs in the Backtests sub-menu: [{name, state, label?}], newest first.
+  function setRecent(runs) {
+    const box = document.getElementById('nav-recent');
+    if (!box) return;
+    box.innerHTML = runs.length ? runs.map((r) => `
+      <button class="nav-btn nav-sub" data-page="backtests/run/${esc(r.name)}" data-tooltip="${esc(r.name)} (${esc(r.label || r.state)})" title="${esc(r.name)} · ${esc(r.label || r.state)}">
+        <span class="run-dot ${esc(r.state)}"></span><span class="nav-label">${esc(r.name)}</span>
+      </button>`).join('') : '<div class="nav-empty nav-label">No runs yet</div>';
+    box.querySelectorAll('.nav-btn[data-page]').forEach((b) =>
+      b.addEventListener('click', () => { location.hash = '#/backtests/run/' + encodeURIComponent(b.dataset.page.slice(14)); }));
+    markActive(route().path);
+  }
+
+  // The Swing sub-menu's watchlists: [{id, name, kind, count}].
+  function setWatchlists(lists) {
+    const box = document.getElementById('nav-watchlists');
+    if (!box) return;
+    box.innerHTML = lists.length ? lists.map((w) => `
+      <button class="nav-btn nav-sub" data-page="swing/watch/${w.id}" data-tooltip="${esc(w.name)}" title="${esc(w.name)} · ${w.count} stocks">
+        <i class="fa-solid ${w.kind === 'auto' ? 'fa-robot' : 'fa-star'}"></i><span class="nav-label">${esc(w.name)}</span><span class="nav-count">${w.count}</span>
+      </button>`).join('') : '<div class="nav-empty nav-label">No watchlists</div>';
+    box.querySelectorAll('.nav-btn[data-page]').forEach((b) =>
+      b.addEventListener('click', () => { location.hash = '#/' + b.dataset.page; }));
+    markActive(route().path);
+  }
+
   function initSidebar() {
     const sb = document.getElementById('sidebar');
     // Narrow windows always start collapsed (icons only); wide ones follow the saved choice.
@@ -196,8 +269,19 @@ const App = (() => {
       sb.classList.toggle('collapsed');
       if (!narrow.matches) prefs.set('sidebarCollapsed', sb.classList.contains('collapsed'));
     });
+    initSections();
+    document.querySelector('.menu-main')?.setAttribute('aria-hidden', 'false');
+    document.querySelectorAll('.menu:not(.menu-main)').forEach((m) => m.toggleAttribute('inert', true));
     document.querySelectorAll('.nav-btn[data-page]').forEach((b) =>
-      b.addEventListener('click', () => { location.hash = '#/' + b.dataset.page; }));
+      b.addEventListener('click', () => {
+        // A sub-menu button on its own section (e.g. back in Backtests after ← Main menu) only swaps
+        // the menu; from anywhere else it opens the section's first page.
+        const sub = b.dataset.submenu;
+        if (sub && route().name === sub) { showMenu(sub); return; }
+        location.hash = '#/' + b.dataset.page;
+      }));
+    // ← Main menu swaps the menu and leaves the page as it is.
+    document.querySelectorAll('.nav-back').forEach((b) => b.addEventListener('click', () => showMenu('main')));
   }
 
   async function start() {
@@ -210,11 +294,15 @@ const App = (() => {
       toast('Dashboard server not reachable', 'error');
     }
     window.addEventListener('hashchange', go);
+    // The first page shows its menu in place (no slide when a #/backtests link is opened).
+    const menus = document.getElementById('sidebar-menus');
+    menus?.classList.add('instant');
     go();
+    requestAnimationFrame(() => requestAnimationFrame(() => menus?.classList.remove('instant')));
   }
 
   return {
-    start, page, api, prefs, toast, chart, destroyCharts, colorFor, navigate,
+    start, page, api, prefs, toast, chart, destroyCharts, colorFor, navigate, route, setRecent, setWatchlists, showMenu,
     money, num, tone, esc, isoDate, shiftDate, prettyDate, timeOf, whenOn, duration, pct,
     REASONS, reason, chip, kpi, emptyState,
     get meta() { return meta; },

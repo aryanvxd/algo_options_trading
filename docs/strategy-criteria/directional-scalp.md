@@ -163,9 +163,9 @@ Then the option checks, at the moment of entry:
 | # | Check | Rule *(proposed)* |
 |---|---|---|
 | O1 | Strike | ATM CE or PE, nearest expiry. If the ATM spread fails, one strike nearer the money (ITM) |
-| O2 | Spread | bid-ask ≤ **0.50 pts** |
+| O2 | Spread | bid-ask ≤ **1.0 pt** (0.50 until 12 Nov 2026: recorded quotes show 0.40–0.45 at ₹150–200 and 0.50–0.65 at ₹200–300, so 0.50 refused most ATM entries) |
 | O3 | Fresh quote | last tick ≤ **2 s** old |
-| O4 | Premium band | ₹40–250 (keeps out an almost-worthless 0 DTE option late in the window, and a far too dear one) |
+| O4 | Premium band | ₹40–350 (keeps out an almost-worthless 0 DTE option late in the window, and a far too dear one; the cap was ₹250 until 12 Nov 2026, which refused 4-DTE ATM options) |
 
 ## 6. Position construction
 
@@ -231,7 +231,7 @@ uses 4 orders too, and the condor uses 8.
 
 | Item | Rule *(proposed — confirm)* |
 |---|---|
-| Capital bucket | **₹35,000**. 2 lots of the dearest ATM (about ₹180 on 3–4 DTE) is ≈ ₹23,400, plus a buffer. No margin: buying pays in full. On expiry day 2 lots of ATM is only about ₹8,000–12,000 |
+| Capital bucket | **₹50,000** (₹35,000 until 12 Nov 2026). 2 lots at the ₹350 premium cap is ₹45,500, plus a buffer; a typical 3–4 DTE ATM (₹180–300) is ₹23,400–39,000. No margin: buying pays in full. On expiry day 2 lots of ATM is only about ₹8,000–12,000 |
 | Worst case per trade | the full premium, only if the feed and both stops fail. A gap can't lose more than that |
 | Max loss per week | **₹6,000** → pause and review |
 | Max loss per month | **₹12,000** → pause, re-test on replays |

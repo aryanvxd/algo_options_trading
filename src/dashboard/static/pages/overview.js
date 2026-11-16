@@ -19,6 +19,7 @@
   let timers = [];
   let stopControl = null;
   let lastHistory = null;
+  let control = null;      // the last /api/control poll: which processes really are running
 
   function render(el) {
     state = {
@@ -32,8 +33,9 @@
           <div class="page-title"><i class="fa-solid fa-gauge-high"></i>Overview</div>
           <div class="page-subtitle" id="ov-subtitle">Today's P&amp;L by strategy</div>
         </div>
-        <div class="header-meta">
-          <span id="ov-live" class="chip live tone-green hidden"><span class="chip-dot"></span>Live</span>
+        <div class="header-meta header-wrap">
+          <span id="ov-live"></span>
+          <span id="ov-kite" class="control-kite"></span>
           <span id="ov-updated"></span>
           <button class="btn-icon-box" id="ov-refresh" title="Refresh" aria-label="Refresh"><i class="fa-solid fa-rotate"></i></button>
         </div>
@@ -72,7 +74,9 @@
     document.getElementById('ov-today').addEventListener('click', () => setDate(App.meta?.today || App.isoDate(new Date())));
     document.getElementById('ov-refresh').addEventListener('click', () => load(true));
     stopControl?.();
-    stopControl = App.control.mount(document.getElementById('ov-control'));
+    control = null;
+    stopControl = App.control.mount(document.getElementById('ov-control'),
+      { kiteEl: document.getElementById('ov-kite'), onStatus: paintRunState });
     load(true);
   }
 
@@ -94,11 +98,25 @@
 
   const isToday = () => state.date === (App.meta?.today || App.isoDate(new Date()));
   const isLiveView = () => isToday() && state.source === 'live';
+  const runningCount = () => Object.values(control?.algos || {}).filter((a) => a.running).length;
+
+  // The header chip follows the running processes and the Kite session, not the date being viewed.
+  function paintRunState(data) {
+    control = data;
+    const box = document.getElementById('ov-live');
+    if (!box) return;
+    const n = runningCount();
+    let label = 'Idle', tone = 'tone-slate', title = 'No strategy is running';
+    if (!data) [label, tone, title] = ['Offline', 'tone-red', 'The dashboard server is not responding'];
+    else if (n && data.kite.logged_in) [label, tone, title] = [`Live · ${n} running`, 'tone-green', 'Strategies are running now'];
+    else if (n) [label, tone, title] = [`${n} running · Kite logged out`, 'tone-amber', 'A strategy is running without a valid Kite session'];
+    box.innerHTML = chip(label, tone, n > 0);
+    box.title = title;
+  }
 
   function schedule() {
     timers.forEach(clearInterval);
     timers = [];
-    document.getElementById('ov-live')?.classList.toggle('hidden', !isLiveView());
     if (!isLiveView()) return;
     timers.push(setInterval(() => load(false), REFRESH_MS));
     timers.push(setInterval(() => { lastHistory = null; }, HISTORY_REFRESH_MS));
@@ -159,6 +177,8 @@
   }
 
   function kpis(t) {
+    // Not t.running: a run whose window was closed stays STARTED / IN_TRADE in the database.
+    const running = isLiveView() ? runningCount() : 0;
     return `<div class="kpi-strip">
       ${kpi('Net P&amp;L', App.money(t.net), App.tone(t.net), 'fa-indian-rupee-sign', 'tone-green', 'after charges')}
       ${kpi('Gross P&amp;L', App.money(t.gross), App.tone(t.gross), 'fa-chart-line', 'tone-blue', 'before charges')}
@@ -166,7 +186,7 @@
       ${kpi('Open MTM', t.open_positions ? App.money(t.open_net) : '—', App.tone(t.open_net), 'fa-hourglass-half', 'tone-violet',
             `${t.open_positions} open position${t.open_positions === 1 ? '' : 's'}`)}
       ${kpi('Trades', t.trades, '', 'fa-right-left', 'tone-slate', `${t.traded} of ${t.strategies} strategies traded`)}
-      ${kpi('Skipped', t.skipped, '', 'fa-forward', 'tone-slate', t.running ? `${t.running} still running` : 'stood aside today')}
+      ${kpi('Skipped', t.skipped, '', 'fa-forward', 'tone-slate', running ? `${running} still running` : 'stood aside today')}
     </div>`;
   }
 
@@ -181,7 +201,7 @@
     if (['STARTED', 'IN_TRADE'].includes(s.status) && ['ENTRY_PENDING', 'EXITING'].includes(s.live_status)) key = s.live_status;
     else if (s.live_status === 'DONE' && s.status === 'IN_TRADE') key = 'CLOSED';
     const st = STATUS[key] || [s.status, 'tone-slate', false];
-    const live = st[2] && isLiveView();
+    const live = st[2] && isLiveView() && !!control?.algos[s.algo_id]?.running;
     const modeChip = s.mode === 'live' ? chip('Live', 'tone-red', false) : chip('Paper', 'tone-violet', false);
     const traded = s.trades > 0;
     const pnl = traded ? (s.net ?? s.gross) : null;

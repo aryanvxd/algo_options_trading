@@ -48,9 +48,9 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
 
 
 def cmd_swing(args: argparse.Namespace, platform: PlatformConfig) -> int:
-    from swing.settings import load_swing_config
+    from swing.settings import load_user_config
 
-    cfg = load_swing_config()
+    cfg = load_user_config(platform)          # config.yaml + the dashboard's saved settings
     if args.action == "universe":
         return _universe(cfg, platform)
     if args.action == "data":
@@ -102,48 +102,103 @@ def _holdings(cfg, platform: PlatformConfig) -> int:
 
 
 def _scan(args, cfg, platform: PlatformConfig) -> int:
+    """The weekend workflow: candles, sectors, stocks, picks, then the Algo picks watchlist and the
+    journal. Each stage is reported to scan_status.json for the dashboard's Weekend run page."""
     from swing import overview
     from swing.bars import avg_traded_value_cr, daily_bars
     from swing.chart import render_html
+    from swing.progress import ScanStatus
     from swing.universe import load_swing_universe
     from swing.zones import find_zones
     from trading_core.marketdata.store import MarketStore, slug
 
-    store = MarketStore(platform.marketdata.dir)
-    if not args.no_refresh:
-        stored = daily_bars(store, cfg.index_universe)
-        last = max((b.dates[-1] for b in stored.values()), default=None)
-        start = (last - timedelta(days=5)).isoformat() if last else None
-        _data(argparse.Namespace(start=start, end=None, indices_only=False), cfg, platform)
-        _holdings(cfg, platform)
-    u = load_swing_universe(platform, cfg.universe)
-    index_bars = daily_bars(store, cfg.index_universe)
-    stock_bars = daily_bars(store, cfg.universe)
-    latest = max(b.dates[-1] for b in index_bars.values())
-    fresh = latest - timedelta(days=cfg.overview_stale_days)
     folder = platform.reports_dir / "swing"
     folder.mkdir(parents=True, exist_ok=True)
-    traded = {s: avg_traded_value_cr(b) for s, b in stock_bars.items()}
-    wanted = {s: b for s, b in stock_bars.items()
-              if b.dates[-1] >= fresh and traded[s] >= cfg.min_traded_value_cr}
+    status = ScanStatus(folder, refresh=not args.no_refresh)
+    store = MarketStore(platform.marketdata.dir)
+    try:
+        if not args.no_refresh:
+            status.start("refresh")
+            stored = daily_bars(store, cfg.index_universe)
+            last = max((b.dates[-1] for b in stored.values()), default=None)
+            start = (last - timedelta(days=5)).isoformat() if last else None
+            _data(argparse.Namespace(start=start, end=None, indices_only=False), cfg, platform)
+            _holdings(cfg, platform)
+            status.done("refresh", "candles and holdings read from Kite")
+        else:
+            status.skip("refresh", "stored candles (no Kite)")
+        status.start("sectors")
+        u = load_swing_universe(platform, cfg.universe)
+        index_bars = daily_bars(store, cfg.index_universe)
+        stock_bars = daily_bars(store, cfg.universe)
+        bench = daily_bars(store, cfg.benchmark_universe, [cfg.benchmark]).get(cfg.benchmark)
+        latest = max(b.dates[-1] for b in index_bars.values())
+        fresh = latest - timedelta(days=cfg.overview_stale_days)
+        traded = {s: avg_traded_value_cr(b) for s, b in stock_bars.items()}
+        wanted = {s: b for s, b in stock_bars.items()
+                  if b.dates[-1] >= fresh and traded[s] >= cfg.min_traded_value_cr}
+        reps: dict = {}
 
-    def rows(bars) -> list:
-        out = []
-        for b in bars.values():
-            rep = find_zones(b, cfg.zones)
-            out.append(overview.row_for(b, rep, cfg.overview_near_atr))
-            if rep.zones:
-                (folder / f"{slug(b.symbol)}.html").write_text(render_html(b, rep), encoding="utf-8")
-        return out
+        def rows(bars) -> list:
+            out = []
+            for b in bars.values():
+                rep = reps[b.symbol] = find_zones(b, cfg.zones)
+                out.append(overview.row_for(b, rep, cfg.overview_near_atr))
+                if rep.zones:
+                    (folder / f"{slug(b.symbol)}.html").write_text(render_html(b, rep), encoding="utf-8")
+            return out
 
-    indices, stocks = rows(index_bars), rows(wanted)
-    args_ = (u, indices, stocks, traded, cfg.overview_near_atr, cfg.min_traded_value_cr, len(u.symbols) - len(stocks))
-    path = folder / "overview.html"
-    path.write_text(overview.render(*args_), encoding="utf-8")
-    sparks = {s: [round(float(c), 2) for c in b.close[-60:]] for s, b in index_bars.items()}
-    (folder / "overview.json").write_text(json.dumps(overview.payload(*args_, sparks)), encoding="utf-8")
-    print(f"{len(indices)} indices, {len(stocks)} of {len(u.symbols)} stocks, candles to {latest} -> {path}")
+        indices = rows(index_bars)
+        status.done("sectors", f"{len(indices)} indices, candles to {latest}")
+        status.start("stocks")
+        stocks = rows(wanted)
+        args_ = (u, indices, stocks, traded, cfg.overview_near_atr, cfg.min_traded_value_cr, len(u.symbols) - len(stocks))
+        path = folder / "overview.html"
+        path.write_text(overview.render(*args_), encoding="utf-8")
+        sparks = {s: [round(float(c), 2) for c in b.close[-60:]] for s, b in index_bars.items()}
+        (folder / "overview.json").write_text(json.dumps(overview.payload(*args_, sparks)), encoding="utf-8")
+        status.done("stocks", f"{len(stocks)} liquid stocks of {len(u.symbols)}")
+        print(f"{len(indices)} indices, {len(stocks)} of {len(u.symbols)} stocks, candles to {latest} -> {path}")
+        _picks(cfg, platform, status, u, index_bars, stock_bars, wanted, reps, traded, bench)
+    except Exception as e:
+        status.fail(f"{type(e).__name__}: {e}")
+        raise
+    status.finish()
     return 0
+
+
+def _picks(cfg, platform: PlatformConfig, status, u, index_bars, stock_bars, wanted, reps, traded, bench) -> None:
+    from swing import funnel, tracking, watchlists
+    from trading_core.clock import LiveClock
+    from trading_core.db.engine import Database
+    from trading_core.marketdata.store import MarketStore
+
+    status.start("picks")
+    db = Database(platform.db_url)
+    now = LiveClock().now()
+    payload = funnel.build(u, index_bars, {s: reps[s] for s in index_bars if s in reps},
+                           wanted, {s: reps[s] for s in wanted if s in reps}, traded, bench, cfg, db, now)
+    folder = platform.reports_dir / "swing"
+    (folder / "picks.json").write_text(json.dumps(payload), encoding="utf-8")
+    fz = payload["funnel"]
+    status.done("picks", f"{fz['sectors_passed']} of {fz['sectors']} sectors passed, {fz['considered']} stocks looked at, "
+                         f"{fz['plans']} plans, top {fz['top']}")
+    print(f"picks: {fz['plans']} plans, top {fz['top']} -> {folder / 'picks.json'}")
+    status.start("journal")
+    try:
+        top = funnel.top(payload)
+        n_list = watchlists.replace_auto(db, top, now)
+        added = tracking.record(db, payload, top, cfg, now)
+        store = MarketStore(platform.marketdata.dir)
+        moved = tracking.update(db, lambda syms: tracking.load_bars(store, cfg, syms), cfg, now)
+    except Exception as e:  # noqa: BLE001 - the picks are written; the tables may be missing
+        msg = str(e).splitlines()[0][:200]
+        hint = " (run `algo db upgrade`)" if "no such table" in msg else ""
+        status.fail_stage("journal", f"{msg}{hint}")
+        print(f"journal: failed: {msg}{hint}")
+        return
+    status.done("journal", f"Algo picks: {n_list} stocks; journal: {added} new picks, {moved} followed forward")
+    print(f"journal: {added} new picks, {moved} rows updated")
 
 
 def _backtest(args, cfg, platform: PlatformConfig) -> int:
@@ -262,6 +317,12 @@ def _data(args, cfg, platform: PlatformConfig) -> int:
     kh = KiteHistory(client, MarketStore(platform.marketdata.dir), Manifest(db), progress=print)
     print("indices", kh.equity_daily(cfg.index_universe, [ix.name for ix in u.indices], start, end,
                                      segment="INDICES"))
+    # The benchmark (NIFTY 50) for the sectors' relative strength: a year back the first time.
+    from swing.bars import daily_bars
+
+    have = daily_bars(MarketStore(platform.marketdata.dir), cfg.benchmark_universe, [cfg.benchmark])
+    b_start = start if have else min(start, end - timedelta(days=400))
+    print("benchmark", kh.equity_daily(cfg.benchmark_universe, [cfg.benchmark], b_start, end, segment="INDICES"))
     if not args.indices_only:
         for i in range(0, len(u.symbols), DOWNLOAD_BATCH):
             batch = u.symbols[i:i + DOWNLOAD_BATCH]

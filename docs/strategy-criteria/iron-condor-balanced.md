@@ -113,6 +113,12 @@ real 5-second snapshots; arm ₹800, give back ₹400).
 
 The peak is held in memory, so a restart during a trade starts the trail again from that moment.
 
+**In backtests (from 15 Nov 2026)** the trail also sees the peaks and dips inside each minute (the
+legs at the index's minute high and low, [../design/backtest.md](../design/backtest.md) section 5a).
+On minute closes alone, 13 Nov 2026 read +₹996 net, with the exit at 12:09. Live made +₹168, with
+the exit at 10:45. The backtest now reads +₹214, with the exit at 10:46. Trail results from before
+15 Nov are optimistic on days like that.
+
 **Why wider than the original's 5 / 8:** on 3–4 DTE the credit is 75–110 pts, and a 5-pt stop
 fired on ordinary noise. From 28 Oct to 4 Nov it turned three eventual winners into losses (28 Oct,
 2 Nov, 4 Nov) and saved one (29 Oct). On real candles (`algo backtest --options real`, 28 Oct –

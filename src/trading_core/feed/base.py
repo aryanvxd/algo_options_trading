@@ -81,6 +81,13 @@ class MarketFeed(ABC):
     def last_tick_age(self, now: datetime) -> float | None:
         """Seconds since any subscribed instrument last ticked; None if nothing yet."""
 
+    def minute_path(self, token: int, now: datetime) -> list[Tick] | None:
+        """Backtests on 1-minute candles only: the contract's quotes along the minute that just
+        finished (open, at the index's first extreme, at its second, close), so exits that follow
+        a peak see the highs and lows a close-only replay hides. None for a feed that already ticks
+        inside the minute (live, modelled prices) or a contract that did not trade in that minute."""
+        return None
+
     def snapshot(self) -> list[Tick]:
         """Latest tick of every subscribed token (used by the tick recorder)."""
         out = []

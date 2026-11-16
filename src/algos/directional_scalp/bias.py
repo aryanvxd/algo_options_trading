@@ -5,7 +5,8 @@ score = w_breadth × B1 + w_skew × B2 + w_vwap × B3, each part −1 (bearish) 
   B2  PE ÷ CE premium at the same distance from spot: the richer side is the direction, with the
       neutral point shifted for the normal put skew (bull_ratio -> +1, bear_ratio -> −1)
   B3  NIFTY futures − VWAP                       ±vwap_full_pts -> ±1
-A missing part counts as 0. Breadth is required: without it there is no side.
+A missing part counts as 0. Breadth is required (``require_breadth``, the default): without it there
+is no side, and the side must agree with it.
 """
 
 from __future__ import annotations
@@ -49,8 +50,8 @@ def score(cfg: BiasConfig, now: datetime, weighted_ad: float | None, skew_ratio:
         b2 = round(_clip((mid - skew_ratio) / half), 3)
     b3 = round(_clip(fut_minus_vwap / cfg.vwap_full_pts), 3) if fut_minus_vwap is not None else None
     total = None
-    if b1 is not None:
-        total = round(cfg.w_breadth * b1 + cfg.w_skew * (b2 or 0.0) + cfg.w_vwap * (b3 or 0.0), 3)
+    if b1 is not None or (not cfg.require_breadth and (b2 is not None or b3 is not None)):
+        total = round(cfg.w_breadth * (b1 or 0.0) + cfg.w_skew * (b2 or 0.0) + cfg.w_vwap * (b3 or 0.0), 3)
     return BiasReading(now, total, b1, b2, b3, weighted_ad, skew_ratio, fut_minus_vwap)
 
 
@@ -70,7 +71,11 @@ class BiasTracker:
             self._side, self._since = side, reading.ts if side else None
 
     def raw_side(self, r: BiasReading) -> str | None:
-        if r.score is None or r.b1 is None:
+        if r.score is None:
+            return None
+        if not self.cfg.require_breadth:
+            return CE if r.score >= self.cfg.threshold else PE if r.score <= -self.cfg.threshold else None
+        if r.b1 is None:
             return None
         if r.score >= self.cfg.threshold and r.b1 > 0:       # breadth must agree
             return CE

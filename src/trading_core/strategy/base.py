@@ -30,7 +30,7 @@ from trading_core.broker.charges import ChargeCalculator
 from trading_core.clock import Clock
 from trading_core.config import PlatformConfig
 from trading_core.db.repo import Journal
-from trading_core.feed.base import MarketFeed
+from trading_core.feed.base import MarketFeed, Tick
 from trading_core.kite.instruments import InstrumentStore
 from trading_core.market.calendar import MarketCalendar
 from trading_core.market.premarket import PremarketSource
@@ -138,6 +138,7 @@ class BaseAlgo(ABC):
         self._entry_retry_at: datetime | None = None
         self._last_snapshot: datetime | None = None
         self._snapshots: list[dict[str, Any]] = []
+        self._path_minute: datetime | None = None
 
     # ------------------------------------------------------------ hooks for subclasses
 
@@ -259,7 +260,7 @@ class BaseAlgo(ABC):
             return
         if self.kill_requested or self.paused:
             self.notes.append("entry blocked by kill/pause")
-            self.state = DONE
+            self._finish_day()
             return
         self.state = ENTRY_PENDING
 
@@ -270,7 +271,7 @@ class BaseAlgo(ABC):
         self.event("KILL_SWITCH", f"kill requested: {reason}", level="WARNING")
         if self.state in (IDLE, READY, ENTRY_PENDING):
             self.notes.append(f"killed before entry: {reason}")
-            self.state = DONE
+            self._finish_day()
 
     def on_error(self, exc: BaseException, where: str) -> None:
         self.log.exception("error in %s", where)
@@ -422,7 +423,7 @@ class BaseAlgo(ABC):
             signal = self.risk.evaluate(RiskContext(
                 now=now, position=pos, mark=mark, feed_age_s=self.ctx.feed.last_tick_age(now),
                 kill_requested=self.kill_requested, kill_reason=self.kill_reason,
-                day_realized_pnl=self.realized_net))
+                day_realized_pnl=self.realized_net, minute_path=self._minute_path_marks(pos, now)))
             if signal:
                 self._start_exit(signal)
 
@@ -442,6 +443,30 @@ class BaseAlgo(ABC):
             self.flush_snapshots()
             self._after_trade(now)
 
+    def _minute_path_marks(self, pos: Position, now: datetime) -> list[Mark] | None:
+        """Backtests on 1-minute candles: the position marked along the minute that just finished,
+        once per minute. Only minutes the trade was open for, and None when the feed has no path
+        (live, modelled prices). A leg that did not trade that minute keeps its last quote."""
+        minute = now.replace(second=0, microsecond=0)
+        if minute == self._path_minute:
+            return None
+        self._path_minute = minute
+        entered = pos.entry_time.replace(second=0, microsecond=0) if pos.entry_time else None
+        if entered is None or minute - timedelta(minutes=1) < entered:
+            return None
+        feed = self.ctx.feed
+        paths = {l.instrument_token: feed.minute_path(l.instrument_token, now) for l in pos.open_legs}
+        if not any(paths.values()):
+            return None
+
+        def quote_at(k: int):
+            def quote(token: int) -> Tick | None:
+                path = paths.get(token)
+                return path[k] if path else feed.latest(token)
+            return quote
+
+        return [pos.mark(quote_at(k), self.ctx.charges, now) for k in range(4)]
+
     def _after_trade(self, now: datetime) -> None:
         """A trade just finished: look for the next one, or stop for the day."""
         block = self.reentry_block(now)
@@ -449,7 +474,7 @@ class BaseAlgo(ABC):
             if self.cfg.max_trades > 1:
                 self.notes.append(f"no more entries: {block}")
                 self.event("ENTRIES_STOPPED", f"no more entries today: {block}")
-            self.state = DONE
+            self._finish_day()
             return
         self.position = None
         self.exit_signal = None
@@ -463,7 +488,19 @@ class BaseAlgo(ABC):
     def _stop_entries(self, reason: str) -> None:
         self.notes.append(f"no more entries: {reason}")
         self.event("ENTRIES_STOPPED", f"no more entries today: {reason}")
+        self._finish_day()
+
+    def _finish_day(self) -> None:
+        """No more trading today. Record the day now (daily summary, run DONE) rather than only at the
+        report step: the process stays up until then to record ticks, and if it ends early (window
+        closed, laptop asleep or shut) the day would otherwise be left as a run still "in trade"."""
         self.state = DONE
+        try:
+            self.flush_snapshots()
+            self.ctx.journal.write_daily_summary(self.summary())
+            self.ctx.journal.set_run_status(self.ctx.run_id, "DONE", self.ctx.clock.now())
+        except Exception:  # noqa: BLE001 - the report step writes it again; never break the loop
+            self.log.exception("day summary not written early; the report step will write it")
 
     # ------------------------------------------------------------ capital
 

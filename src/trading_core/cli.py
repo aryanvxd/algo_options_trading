@@ -170,8 +170,18 @@ def cmd_backtest(args: argparse.Namespace, platform: PlatformConfig) -> int:
     from trading_core.backtest.engine import run_backtest
     from trading_core.backtest.summary import print_summary
 
-    end = date.fromisoformat(args.end) if args.end else date.today()
-    folder = run_backtest(platform, args.algo, date.fromisoformat(args.start), end, overrides=parse_sets(args.set),
+    from pathlib import Path
+
+    from trading_core.config import deep_merge, int_keys
+
+    end =date.fromisoformat(args.end) if args.end else date.today()
+    overrides = parse_sets(args.set)
+    if args.overrides_file:                      # JSON (the dashboard writes it); applied after any --set
+        extra = json.loads(Path(args.overrides_file).read_text(encoding="utf-8"))
+        if not isinstance(extra, dict):
+            raise ValueError(f"{args.overrides_file}: expected a JSON object of config overrides")
+        overrides = deep_merge(overrides, int_keys(extra))
+    folder = run_backtest(platform, args.algo, date.fromisoformat(args.start), end, overrides=overrides,
                           name=args.name, lot_size=args.lot_size, option_prices=args.options)
     print_summary(json.loads((folder / "summary.json").read_text(encoding="utf-8")))
     print()
@@ -211,7 +221,9 @@ def cmd_dashboard(args: argparse.Namespace, platform: PlatformConfig) -> int:
 
         threading.Timer(1.0, webbrowser.open, [url]).start()
     # Bound to localhost only: the dashboard has no login.
-    uvicorn.run(create_app(_db(platform), platform=platform), host="127.0.0.1", port=port, log_level="warning")
+    app = create_app(_db(platform), platform=platform)
+    app.state.backtest_queue.start(LiveClock())          # runs backtests queued from the page, one at a time
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     return 0
 
 
@@ -398,6 +410,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--from", dest="start", required=True, metavar="YYYY-MM-DD")
     b.add_argument("--to", dest="end", metavar="YYYY-MM-DD", help="default: today")
     b.add_argument("--set", action="append", metavar="KEY=VALUE", help="override a config value (repeatable)")
+    b.add_argument("--overrides-file", metavar="PATH", help="config overrides as a JSON object (applied after --set)")
     b.add_argument("--name", help="folder name (default: algo + dates + time)")
     b.add_argument("--lot-size", type=int, default=65, help="lot size used on every day (default 65)")
     b.add_argument("--options", choices=["model", "real"], default="model",

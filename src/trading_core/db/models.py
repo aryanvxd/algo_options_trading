@@ -430,3 +430,78 @@ class MarketDataFile(Base):
     written_at: Mapped[datetime]
 
     __table_args__ = (Index("ix_mdf_dataset_date", "dataset", "trade_date"),)
+
+
+# ---------------------------------------------------------------- swing: watchlists, picks journal, fundamentals
+
+class Watchlist(Base):
+    """A Swing watchlist. ``kind`` auto = filled by each weekend scan (Algo picks); manual = yours."""
+    __tablename__ = "watchlists"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(60))
+    kind: Mapped[str] = mapped_column(String(10))              # auto | manual
+    sort: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime]
+
+
+class WatchlistItem(Base):
+    __tablename__ = "watchlist_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    watchlist_id: Mapped[int] = mapped_column(ForeignKey("watchlists.id"))
+    symbol: Mapped[str] = mapped_column(String(40))
+    added_at: Mapped[datetime]
+    note: Mapped[str | None] = mapped_column(Text)
+    entry: Mapped[float | None] = mapped_column(Float)         # a plan's levels (Algo picks carry them)
+    stop: Mapped[float | None] = mapped_column(Float)
+    target: Mapped[float | None] = mapped_column(Float)
+    price_added: Mapped[float | None] = mapped_column(Float)   # last close when added
+
+    __table_args__ = (Index("ix_watch_item", "watchlist_id", "symbol", unique=True),)
+
+
+class SwingPick(Base):
+    """The picks journal: every pick a weekend scan made, and its random twin (same stock and week,
+    a random entry with the same stop and target distances), followed forward on daily candles."""
+    __tablename__ = "swing_picks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scan_date: Mapped[date] = mapped_column(Date)              # the last candle the scan used
+    symbol: Mapped[str] = mapped_column(String(40))
+    industry: Mapped[str | None] = mapped_column(String(80))
+    sector: Mapped[str | None] = mapped_column(String(40))     # the index that passed stage 1
+    rank: Mapped[int | None] = mapped_column(Integer)
+    is_twin: Mapped[bool] = mapped_column(Boolean, default=False)
+    twin_of: Mapped[int | None] = mapped_column(Integer)
+    mode: Mapped[str] = mapped_column(String(8))               # oco | target
+    close: Mapped[float] = mapped_column(Float)
+    atr: Mapped[float] = mapped_column(Float)
+    entry: Mapped[float] = mapped_column(Float)
+    stop: Mapped[float] = mapped_column(Float)
+    target: Mapped[float] = mapped_column(Float)
+    rr: Mapped[float | None] = mapped_column(Float)
+    score: Mapped[float | None] = mapped_column(Float)
+    parts: Mapped[dict[str, Any] | None]                      # score parts and flags
+    status: Mapped[str] = mapped_column(String(10))            # pending | open | target | stop | time | expired
+    fill_date: Mapped[date | None] = mapped_column(Date)
+    fill_price: Mapped[float | None] = mapped_column(Float)
+    exit_date: Mapped[date | None] = mapped_column(Date)
+    exit_price: Mapped[float | None] = mapped_column(Float)
+    last_close: Mapped[float | None] = mapped_column(Float)
+    return_pct: Mapped[float | None] = mapped_column(Float)    # net of costs; open: at the last close
+    updated_at: Mapped[datetime]
+
+    __table_args__ = (Index("ix_swing_pick", "scan_date", "symbol", "is_twin", unique=True),
+                      Index("ix_swing_pick_status", "status"))
+
+
+class Fundamental(Base):
+    """One number for one stock, e.g. roce = 18.4, from an uploaded CSV (source csv) for now."""
+    __tablename__ = "fundamentals"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(40))
+    metric: Mapped[str] = mapped_column(String(60))            # a column key: lower case, words joined by _
+    value: Mapped[float] = mapped_column(Float)
+    as_of: Mapped[date | None] = mapped_column(Date)
+    source: Mapped[str] = mapped_column(String(20))
+    updated_at: Mapped[datetime]
+
+    __table_args__ = (Index("ix_fundamental", "symbol", "metric", unique=True),)

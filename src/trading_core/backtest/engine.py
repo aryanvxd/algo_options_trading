@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib
 import json
 import logging
+import os
 import time as _time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -86,7 +87,8 @@ def run_backtest(platform: PlatformConfig, algo_id: str, start: date, end: date,
 
     meta = dict(name=name, algo_id=algo_id, version=cfg.version, start=str(start), end=str(end), days=len(days),
                 option_prices=option_prices, lot_size=lot_size, overrides=overrides or {}, backtest_overrides=backtest_overrides(algo_id),
-                started_at=datetime.now().astimezone().isoformat(timespec="seconds"))
+                started_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+                pid=os.getpid())                        # lets the dashboard tell a stopped run from a running one
     _status(folder, meta, "running", 0)
     if not days:
         _status(folder, meta, "failed", 0, error=f"no NIFTY minute data between {start} and {end} "

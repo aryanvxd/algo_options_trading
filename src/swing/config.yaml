@@ -2,6 +2,7 @@
 # Spec: docs/strategy-criteria/weekend-sr-swing.md. Not a BaseAlgo: a weekly batch scan.
 
 universe: swing              # config/universes/swing.yaml, written by `algo swing universe`
+benchmark: NIFTY 50          # sectors' relative strength is measured against it (equity_daily key swing_benchmark)
 history_days: 2920           # first download: about 8 years of daily candles
 min_traded_value_cr: 25      # S5: 20-day average traded value, ₹ crore (liquid stocks only)
 overview_near_atr: 1.0       # the overview's "near support/resistance": within 1 ATR of the zone
@@ -43,6 +44,27 @@ setups:                      # spec section 5
   cost_pct: 0.25             # round trip, delivery
   max_open: 8
   max_per_sector: 3          # per NSE industry
+
+funnel:                      # the weekend workflow (dashboard Swing › Picks); Settings saves changes to
+                             # data/swing/overrides.json, merged over this file
+  sector_near_atr: 1.5       # stage 1: a sector index inside a zone, or within 1.5 ATR above a support ...
+  sector_need_trend: true    # ... with its trend up (close above the 200-day average or weekly 50-EMA rising)
+  require_sector: true       # stage 2 looks only at stocks of the sectors that pass
+  rsi_days: 14
+  stop_atr: 1.0              # stage 2: stop = zone bottom - 1 ATR (setups.stop_atr stays 0.5 for the backtest)
+  default_mode: oco          # oco (stop + target) or target (target only)
+  top_n: 10                  # stage 3: the best N, at most setups.max_per_sector per industry, fill Algo picks
+  w_tech: 0.75               # score = weighted average of the parts there are (no fundamentals: tech + news)
+  w_news: 0.10
+  w_fund: 0.15
+  news_days: 21              # results within 21 days of the scan: flagged, news score - 60
+  results_penalty: 60
+  macro_days: 7              # High-impact Indian macro events within 7 days: flagged, news score - 20
+  macro_penalty: 20
+  fund_rules:                # metric = a column key of the uploaded fundamentals CSV
+    - {metric: roce, op: ">=", value: 15}
+    - {metric: debt_to_equity, op: "<=", value: 1}
+    - {metric: price_to_book_value, op: "<=", value: 5}
 
 backtest:                    # W3 zone backtest (spec section 9): `algo swing backtest`
   move_atr: 1.0              # held = 1 ATR beyond the near edge before 1 ATR through the far edge

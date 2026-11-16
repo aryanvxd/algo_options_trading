@@ -1,7 +1,10 @@
-/* Run control: Kite login state and a Start / Stop button per strategy.
+/* Run control: Kite login state and Start / Stop for each strategy.
    Start opens `algo run --algo <id>` in its own window (it keeps running if the dashboard is
    closed); Stop sends KILL, the same as `algo kill`: square off, then stop.
-   App.control.mount(el, {algoId}) renders it into `el` and keeps it fresh; it returns a stop function. */
+   App.control.mount(el, {algoId}) renders one strategy's compact row into `el`. Without algoId it
+   renders a card per strategy into `el`, the Kite state into opts.kiteEl, and hands every poll to
+   opts.onStatus(data), or onStatus(null) if the server can't be reached. Either way it keeps
+   itself fresh and returns a stop function. */
 
 (() => {
   const POLL_MS = 5000;
@@ -13,14 +16,17 @@
   function kiteChip(k) {
     if (k.logged_in) {
       const until = k.valid_until ? `${k.valid_until.slice(11, 16)} ${k.valid_until.slice(8, 10)}/${k.valid_until.slice(5, 7)}` : '';
+      if (k.verified === false) return `<span class="chip tone-amber" title="Valid until ${until} by the clock, but Kite could not be reached to confirm it"><span class="chip-dot"></span>Kite: not verified</span>`;
       return `<span class="chip tone-green" title="Kite session valid until ${until}"><span class="chip-dot"></span>Kite logged in</span>`;
     }
-    return `<span class="chip tone-amber"><span class="chip-dot"></span>Kite: not logged in</span>
+    const chip = k.rejected
+      ? '<span class="chip tone-red" title="Kite no longer accepts this session"><span class="chip-dot"></span>Kite: session rejected</span>'
+      : '<span class="chip tone-amber"><span class="chip-dot"></span>Kite: not logged in</span>';
+    return `${chip}
       <button class="btn-secondary btn-sm" data-login><i class="fa-solid fa-right-to-bracket"></i>Log in</button>`;
   }
 
-  function algoRow(id, a, compact) {
-    const name = App.esc(compact ? 'Run' : strategyName(id).replace(/^NIFTY\s+/, ''));
+  function algoRow(id, a) {
     let state;
     if (a.running) state = `<span class="chip tone-green live" title="pid ${a.pid}"><span class="chip-dot"></span>Running since ${App.timeOf(a.started_at, false)}</span>`;
     else if (a.today_run) state = `<span class="chip tone-slate"><span class="chip-dot"></span>${App.esc(a.today_run.status.toLowerCase())} · run #${a.today_run.run_id}</span>`;
@@ -31,7 +37,32 @@
            title="${App.esc(a.can_start ? (a.resume ? 'Resume today\'s run' : 'Start today\'s run') : a.start_blocked)}">
            <i class="fa-solid fa-play"></i>${a.resume ? 'Resume' : 'Start'}</button>`;
     const why = !a.running && !a.can_start && a.start_blocked ? `<span class="muted small">${App.esc(a.start_blocked)}</span>` : '';
-    return `<div class="control-row">${compact ? '' : `<span class="control-name">${name}</span>`}${state}${btn}${why}</div>`;
+    return `<div class="control-row">${state}${btn}${why}</div>`;
+  }
+
+  function cardState(a) {
+    if (a.running) return App.chip(`Running since ${App.timeOf(a.started_at, false)}`, 'tone-green', true);
+    // A run that never reached its report: the window was closed, so Resume picks it back up.
+    if (a.resume) return App.chip(`Stopped · run #${a.today_run.run_id}`, 'tone-amber');
+    if (a.today_run) return App.chip(`${App.esc(a.today_run.status.toLowerCase())} · run #${a.today_run.run_id}`, 'tone-slate');
+    return App.chip('Not started today', 'tone-slate');
+  }
+
+  function algoCard(id, a) {
+    const name = App.esc(strategyName(id).replace(/^NIFTY\s+/, ''));
+    const key = App.esc(id);
+    const verb = a.resume ? 'Resume' : 'Start';
+    const btn = a.running
+      ? `<button class="run-btn stop" data-stop="${key}" title="Square off and stop" aria-label="Stop ${name}"><i class="fa-solid fa-stop"></i></button>`
+      : `<button class="run-btn" data-start="${key}" ${a.can_start ? '' : 'disabled'} aria-label="${verb} ${name}"
+           title="${App.esc(a.can_start ? `${verb} today's run` : a.start_blocked)}"><i class="fa-solid fa-play"></i></button>`;
+    const foot = !a.running && !a.can_start && a.start_blocked
+      ? App.esc(a.start_blocked) : `Entry ${a.entry} · square-off ${a.square_off}`;
+    return `<div class="run-card" style="--strategy-color:${App.colorFor(id)}">
+      <div class="run-card-info"><div class="run-card-name">${name}</div>${cardState(a)}</div>
+      ${btn}
+      <div class="run-card-foot">${foot}</div>
+    </div>`;
   }
 
   async function act(el, opts, fn) {
@@ -46,7 +77,7 @@
   }
 
   function bind(el, opts, data) {
-    el.querySelector('[data-login]')?.addEventListener('click', () => act(el, opts, async () => {
+    (opts.kiteEl || el).querySelector('[data-login]')?.addEventListener('click', () => act(el, opts, async () => {
       await App.api('kite/login', {}, { method: 'POST' });
       App.toast('Kite login opened in a new window: sign in in your browser');
     }));
@@ -74,12 +105,21 @@
     if (!el.isConnected) return;
     let data;
     try { data = await App.api('control'); }
-    catch { el.innerHTML = '<span class="muted small">Run control unavailable</span>'; return; }
-    const ids = opts.algoId ? [opts.algoId] : Object.keys(data.algos);
-    el.innerHTML = `<div class="control-bar${opts.algoId ? ' compact' : ''}">
-      <div class="control-kite">${kiteChip(data.kite)}</div>
-      ${ids.filter((id) => data.algos[id]).map((id) => algoRow(id, data.algos[id], !!opts.algoId)).join('')}</div>`;
+    catch {
+      el.innerHTML = '<span class="muted small">Run control unavailable</span>';
+      if (opts.kiteEl) opts.kiteEl.innerHTML = '';
+      opts.onStatus?.(null);
+      return;
+    }
+    if (opts.algoId) {
+      const a = data.algos[opts.algoId];
+      el.innerHTML = `<div class="control-bar"><div class="control-kite">${kiteChip(data.kite)}</div>${a ? algoRow(opts.algoId, a) : ''}</div>`;
+    } else {
+      opts.kiteEl.innerHTML = kiteChip(data.kite);
+      el.innerHTML = `<div class="run-grid">${Object.entries(data.algos).map(([id, a]) => algoCard(id, a)).join('')}</div>`;
+    }
     bind(el, opts, data);
+    opts.onStatus?.(data);
   }
 
   function mount(el, opts = {}) {

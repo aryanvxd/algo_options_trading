@@ -55,7 +55,7 @@ def feed_at(data, h: int, mi: int, s: int = 0):
 
 
 def test_half_spread_follows_the_measured_buckets():
-    assert [half_spread(p) for p in (2, 20, 60, 150)] == [0.025, 0.05, 0.1, 0.5]
+    assert [half_spread(p) for p in (2, 20, 60, 120, 150, 250, 400)] == [0.025, 0.05, 0.1, 0.15, 0.2, 0.3, 1.0]
 
 
 def test_quote_is_the_last_finished_minute_never_the_current_one(platform):
@@ -73,6 +73,47 @@ def test_quote_is_the_last_finished_minute_never_the_current_one(platform):
     assert t.bid == pytest.approx(t.ltp - half_spread(t.ltp)) and t.ask == pytest.approx(t.ltp + half_spread(t.ltp))
     assert t.oi == 1000 and t.has_depth
     assert feed.latest(2) is None                                    # no candles for it: no quote, never a model
+
+
+def test_minute_path_follows_the_index_not_each_legs_own_order(platform):
+    import numpy as np
+    from trading_core.backtest.feed import OptionSpec
+    from trading_core.backtest.history import Bars
+    seed_history(platform)
+    write_candles(platform, RISING, EXPIRY)
+    data = load_real(platform)
+    m, one = np.array([600., 601., 603.]), np.ones(3)                # 10:00, 10:01, no 10:02 trade, 10:03
+
+    def bars(o, h, l, c):
+        return Bars(m, np.array(o, float), np.array(h, float), np.array(l, float), np.array(c, float), one, one * 1000)
+
+    index = bars([25000, 25010, 25000], [25010, 25012, 25005], [24995, 24990, 24998], [25008, 24992, 25001])
+    # Both legs close below their open at 10:00: their own OHLC order would put both at their lows at once.
+    ce = bars([50, 60, 40], [62, 70, 45], [48, 55, 38], [49, 56, 41])
+    pe = bars([40, 45, 30], [44, 52, 33], [35, 41, 29], [39, 50, 31])
+    clock = SimClock(datetime(2026, 10, 28, 10, 1, 5, tzinfo=IST))
+    feed = BacktestFeed(data, clock, {256265: index}, {1: OptionSpec(25000, "CE", EXPIRY),
+                        2: OptionSpec(25000, "PE", EXPIRY)}, 256265, None, r=0.065, real={1: ce, 2: pe})
+
+    ltp = lambda tok: [t.ltp for t in feed.minute_path(tok, clock.now())]
+    # 10:00 the index rose (open, low, high, close): the CE is at its low then its high, the PE the reverse.
+    assert ltp(1) == [50, 48, 62, 49] and ltp(2) == [40, 44, 35, 39]
+    path = feed.minute_path(1, clock.now())
+    assert path[2].ask == pytest.approx(62 + half_spread(62)) and path[0].oi == 1000
+    assert path[-1].ltp == feed.latest(1).ltp                        # it ends where the quote stands
+    clock._now = clock._now.replace(minute=2)                        # 10:01 the index fell: high first
+    assert ltp(1) == [60, 70, 55, 56] and ltp(2) == [45, 41, 52, 50]
+    clock._now = clock._now.replace(minute=3)
+    assert feed.minute_path(1, clock.now()) is None                  # no trade at 10:02: nothing to replay
+    assert feed.minute_path(3, clock.now()) is None                  # no candles at all
+
+
+def test_live_and_modelled_feeds_have_no_minute_path(platform):
+    seed_history(platform)
+    data = history(platform).load(RISING, FLAT, [], {PREV, FLAT, RISING})
+    clock = SimClock(datetime(2026, 10, 28, 10, 1, tzinfo=IST))
+    feed = BacktestFeed(data, clock, {256265: data.index}, {}, 256265, None, r=0.065)
+    assert feed.minute_path(1, clock.now()) is None
 
 
 def test_no_quote_before_the_contracts_first_candle(platform):

@@ -19,6 +19,9 @@ class RiskContext:
     kill_requested: bool = False
     kill_reason: str | None = None
     day_realized_pnl: float = 0.0
+    # Backtests on 1-minute candles: marks along the minute that just finished (open, at the index's
+    # two extremes, close), given once, on the first loop of the next minute. None everywhere else.
+    minute_path: list[Mark] | None = None
 
 
 @dataclass(frozen=True)

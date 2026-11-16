@@ -49,6 +49,22 @@ def load_active_session(db: Database, now: datetime) -> m.BrokerSession | None:
         ).first()
 
 
+def check_token(api_key: str, access_token: str, timeout_s: float = 5) -> bool | None:
+    """Ask Kite whether this token still works. None means Kite couldn't be asked (no network, an
+    outage), which says nothing about the token."""
+    from kiteconnect import KiteConnect
+    from kiteconnect import exceptions as kex
+
+    try:
+        KiteConnect(api_key=api_key, access_token=access_token, timeout=timeout_s).profile()
+    except kex.TokenException:
+        return False
+    except Exception as e:  # noqa: BLE001
+        log.warning("Could not check the Kite token: %s", type(e).__name__)
+        return None
+    return True
+
+
 def _wait_for_request_token(cfg: KiteConfig, timeout_s: float) -> str:
     result: dict[str, str] = {}
     done = threading.Event()

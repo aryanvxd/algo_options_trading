@@ -29,6 +29,10 @@ class BiasConfig(BaseModel):
     w_breadth: float = 0.4
     w_skew: float = 0.3
     w_vwap: float = 0.3
+    # Breadth must lean the same way as the side (and must have a reading at all). Off: the side comes
+    # from the score alone, so with w_breadth 0 the bias is price vs VWAP: it can follow an index move
+    # that a few heavyweights drive against the breadth (11 Nov 2026: −300 pts with 37 of 50 stocks up).
+    require_breadth: bool = True
     threshold: float = 0.5                  # |score| needed for a side ...
     hold_s: float = 120.0                   # ... held this long
     flip_exit: float = 0.3                  # exit when the score goes this far the other way

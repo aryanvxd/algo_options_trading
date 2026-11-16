@@ -8,7 +8,7 @@ version: "0.2.0"              # 31 Oct 2026: settings from the two-year backtest
 description: Buy the ATM CE or PE when breadth, premium skew and VWAP lean one way and Renko prints two bricks; up to 5 trades 09:45-11:00.
 mode: paper            # live is disabled in v1
 lots: 2
-capital: 35000         # bucket: 2 lots of the dearest ATM (~₹180 on 3-4 DTE ≈ ₹23,400) plus a buffer
+capital: 50000         # bucket: 2 lots at the ₹350 premium cap (₹45,500) plus a buffer (was 35000 to 12 Nov 2026)
 trade_weekdays: [Mon, Tue, Wed, Thu, Fri]
 split_lots: false      # both lots as one order: lot A's +12 booking cut winners short, and 2 orders cost more
 
@@ -47,10 +47,10 @@ trigger:
 option:
   strike_step: 50
   itm_fallback: true           # O1: one strike in the money if ATM fails a check
-  max_spread_pts: 0.50         # O2
+  max_spread_pts: 1.0          # O2 (was 0.50 to 12 Nov 2026: real spreads are 0.40-0.65 on ₹150-300 ATM options, so it blocked most entries)
   max_quote_age_s: 3           # O3
   premium_min: 40              # O4
-  premium_max: 250
+  premium_max: 350             # was 250 to 12 Nov 2026: a 4-DTE ATM option is often ₹250-300
   subscribe_range_pts: 600
   resubscribe_drift_pts: 200
 

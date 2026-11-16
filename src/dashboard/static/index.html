@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/pages/swing.css" />
+  <link rel="stylesheet" href="/static/pages/backtests.css" />
+  <link rel="stylesheet" href="/static/pages/swing_workflow.css" />
   <script src="/static/vendor/chartjs/chart.umd.min.js"></script>
   <script src="/static/vendor/lightweight-charts/lightweight-charts.standalone.production.js"></script>
 </head>
@@ -26,35 +28,162 @@
     </div>
   </div>
 
-  <nav class="sidebar-nav" aria-label="Main">
-    <button class="nav-btn" data-page="overview" data-tooltip="Overview">
-      <i class="fa-solid fa-gauge-high"></i><span class="nav-label">Overview</span>
-    </button>
+  <!-- Menus side by side: the main menu and the Backtests and Swing sub-menus. The route decides which
+       one shows (#/backtests/..., #/swing/... = sub-menu); sections in each collapse (App.prefs nav.open.*). -->
+  <div class="sidebar-menus" id="sidebar-menus" data-menu="main">
+    <nav class="sidebar-nav menu menu-main" id="menu-main" aria-label="Main">
+      <button class="nav-btn" data-page="overview" data-tooltip="Overview">
+        <i class="fa-solid fa-gauge-high"></i><span class="nav-label">Overview</span>
+      </button>
 
-    <div class="nav-section">Strategies</div>
-    <div id="nav-strategies"></div>
+      <div class="nav-group" data-group="strategies">
+        <button class="nav-section" aria-expanded="true"><span>Strategies</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner" id="nav-strategies"></div></div>
+      </div>
 
-    <div class="nav-section">Markets</div>
-    <button class="nav-btn" data-page="calendar" data-tooltip="Market calendar">
-      <i class="fa-solid fa-calendar-days"></i><span class="nav-label">Calendar</span>
-    </button>
-    <button class="nav-btn" data-page="swing" data-tooltip="Swing review">
-      <i class="fa-solid fa-layer-group"></i><span class="nav-label">Swing</span>
-    </button>
+      <div class="nav-group" data-group="markets">
+        <button class="nav-section" aria-expanded="true"><span>Markets</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="calendar" data-tooltip="Market calendar">
+            <i class="fa-solid fa-calendar-days"></i><span class="nav-label">Calendar</span>
+          </button>
+          <button class="nav-btn" data-page="swing" data-submenu="swing" data-tooltip="Swing trading">
+            <i class="fa-solid fa-layer-group"></i><span class="nav-label">Swing</span><i class="fa-solid fa-chevron-right nav-more"></i>
+          </button>
+        </div></div>
+      </div>
 
-    <div class="nav-section">Research</div>
-    <button class="nav-btn" disabled data-tooltip="Backtests (soon)">
-      <i class="fa-solid fa-flask"></i><span class="nav-label">Backtests</span><span class="nav-soon">Soon</span>
-    </button>
-    <button class="nav-btn" disabled data-tooltip="Market data (soon)">
-      <i class="fa-solid fa-database"></i><span class="nav-label">Market data</span><span class="nav-soon">Soon</span>
-    </button>
+      <div class="nav-group" data-group="research">
+        <button class="nav-section" aria-expanded="true"><span>Research</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="backtests" data-not="backtests/data" data-submenu="backtests" data-tooltip="Backtests">
+            <i class="fa-solid fa-flask"></i><span class="nav-label">Backtests</span><i class="fa-solid fa-chevron-right nav-more"></i>
+          </button>
+          <button class="nav-btn" data-page="backtests/data" data-tooltip="Market data">
+            <i class="fa-solid fa-database"></i><span class="nav-label">Market data</span>
+          </button>
+        </div></div>
+      </div>
 
-    <div class="nav-section">System</div>
-    <button class="nav-btn" disabled data-tooltip="Settings (soon)">
-      <i class="fa-solid fa-sliders"></i><span class="nav-label">Settings</span><span class="nav-soon">Soon</span>
-    </button>
-  </nav>
+      <div class="nav-group" data-group="system">
+        <button class="nav-section" aria-expanded="true"><span>System</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" disabled data-tooltip="Settings (soon)">
+            <i class="fa-solid fa-sliders"></i><span class="nav-label">Settings</span><span class="nav-soon">Soon</span>
+          </button>
+        </div></div>
+      </div>
+    </nav>
+
+    <nav class="sidebar-nav menu menu-backtests" id="menu-backtests" aria-label="Backtests">
+      <button class="nav-btn nav-back" id="nav-back" data-tooltip="Main menu">
+        <i class="fa-solid fa-arrow-left"></i><span class="nav-label">Main menu</span>
+      </button>
+      <div class="nav-menu-title"><i class="fa-solid fa-flask"></i><span>Backtests</span></div>
+
+      <div class="nav-group" data-group="bt-run">
+        <button class="nav-section" aria-expanded="true"><span>Run</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="backtests/new" data-tooltip="New backtest">
+            <i class="fa-solid fa-play"></i><span class="nav-label">New backtest</span>
+          </button>
+          <button class="nav-btn" data-page="backtests/sweep" data-tooltip="Parameter sweep">
+            <i class="fa-solid fa-table-cells"></i><span class="nav-label">Parameter sweep</span>
+          </button>
+        </div></div>
+      </div>
+
+      <div class="nav-group" data-group="bt-results">
+        <button class="nav-section" aria-expanded="true"><span>Results</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="backtests/runs" data-tooltip="All runs">
+            <i class="fa-solid fa-list"></i><span class="nav-label">All runs</span>
+          </button>
+          <button class="nav-btn" data-page="backtests/compare" data-tooltip="Compare">
+            <i class="fa-solid fa-code-compare"></i><span class="nav-label">Compare</span>
+          </button>
+        </div></div>
+      </div>
+
+      <div class="nav-group" data-group="bt-data">
+        <button class="nav-section" aria-expanded="true"><span>Data</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="backtests/data" data-tooltip="Coverage">
+            <i class="fa-solid fa-database"></i><span class="nav-label">Coverage</span>
+          </button>
+        </div></div>
+      </div>
+
+      <div class="nav-group nav-recent" data-group="bt-recent">
+        <button class="nav-section" aria-expanded="true"><span>Recent</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner" id="nav-recent">
+          <div class="nav-empty nav-label">No runs yet</div>
+        </div></div>
+      </div>
+    </nav>
+
+    <nav class="sidebar-nav menu menu-swing" id="menu-swing" aria-label="Swing">
+      <button class="nav-btn nav-back" id="nav-back-swing" data-tooltip="Main menu">
+        <i class="fa-solid fa-arrow-left"></i><span class="nav-label">Main menu</span>
+      </button>
+      <div class="nav-menu-title"><i class="fa-solid fa-layer-group"></i><span>Swing</span></div>
+
+      <div class="nav-group" data-group="sw-workflow">
+        <button class="nav-section" aria-expanded="true"><span>Weekend workflow</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="swing/run" data-tooltip="Weekend run">
+            <i class="fa-solid fa-play"></i><span class="nav-label">Weekend run</span>
+          </button>
+          <button class="nav-btn" data-page="swing" data-exact="1" data-tooltip="Sectors">
+            <i class="fa-solid fa-industry"></i><span class="nav-label">Sectors</span>
+          </button>
+          <button class="nav-btn" data-page="swing/picks" data-tooltip="Picks">
+            <i class="fa-solid fa-crosshairs"></i><span class="nav-label">Picks</span>
+          </button>
+        </div></div>
+      </div>
+
+      <div class="nav-group" data-group="sw-watchlists">
+        <button class="nav-section" aria-expanded="true"><span>Watchlists</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner" id="nav-watchlists">
+          <div class="nav-empty nav-label">Loading…</div>
+        </div></div>
+      </div>
+
+      <div class="nav-group" data-group="sw-tracking">
+        <button class="nav-section" aria-expanded="true"><span>Tracking</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="swing/journal" data-tooltip="Picks journal">
+            <i class="fa-solid fa-book"></i><span class="nav-label">Picks journal</span>
+          </button>
+        </div></div>
+      </div>
+
+      <div class="nav-group" data-group="sw-portfolio">
+        <button class="nav-section" aria-expanded="true"><span>Portfolio</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="swing/holdings" data-tooltip="Holdings">
+            <i class="fa-solid fa-briefcase"></i><span class="nav-label">Holdings</span>
+          </button>
+          <button class="nav-btn" data-page="swing/orders" data-tooltip="Orders on Kite">
+            <i class="fa-solid fa-bell"></i><span class="nav-label">Orders</span>
+          </button>
+        </div></div>
+      </div>
+
+      <div class="nav-group" data-group="sw-setup">
+        <button class="nav-section" aria-expanded="true"><span>Setup</span><i class="fa-solid fa-chevron-down nav-caret"></i></button>
+        <div class="nav-group-body"><div class="nav-group-inner">
+          <button class="nav-btn" data-page="swing/settings" data-tooltip="Settings">
+            <i class="fa-solid fa-sliders"></i><span class="nav-label">Settings</span>
+          </button>
+          <button class="nav-btn" data-page="swing/fundamentals" data-tooltip="Fundamentals data">
+            <i class="fa-solid fa-file-csv"></i><span class="nav-label">Fundamentals data</span>
+          </button>
+        </div></div>
+      </div>
+    </nav>
+  </div>
 
   <div class="sidebar-footer" title="Dashboard server connection">
     <span class="conn-dot" id="conn-dot"></span>
@@ -74,6 +203,16 @@
 <script src="/static/pages/strategy.js"></script>
 <script src="/static/pages/calendar.js"></script>
 <script src="/static/pages/swing.js"></script>
+<script src="/static/pages/swing_run.js"></script>
+<script src="/static/pages/swing_picks.js"></script>
+<script src="/static/pages/swing_watch.js"></script>
+<script src="/static/pages/swing_journal.js"></script>
+<script src="/static/pages/swing_settings.js"></script>
+<script src="/static/pages/backtests.js"></script>
+<script src="/static/pages/backtest_new.js"></script>
+<script src="/static/pages/backtest_compare.js"></script>
+<script src="/static/pages/backtest_sweep.js"></script>
+<script src="/static/pages/backtest_data.js"></script>
 <script src="/static/pages/strategies/strangle_scalp.js"></script>
 <script src="/static/pages/strategies/directional_scalp.js"></script>
 <script>App.start();</script>

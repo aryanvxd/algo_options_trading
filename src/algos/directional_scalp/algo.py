@@ -431,7 +431,8 @@ class DirectionalScalpAlgo(BaseAlgo):
         if side is None:
             if r is None or r.score is None:
                 return self._wait("bias: no breadth reading yet")
-            return self._wait(f"bias {r.score:+.2f}: needs {self.cfg.bias.threshold:g} one way, breadth agreeing, "
+            agree = ", breadth agreeing" if self.cfg.bias.require_breadth else ""
+            return self._wait(f"bias {r.score:+.2f}: needs {self.cfg.bias.threshold:g} one way{agree}, "
                               f"for {self.cfg.bias.hold_s:.0f}s")
         if not new_bricks:
             return self._wait(f"bias {side}: waiting for a Renko brick")

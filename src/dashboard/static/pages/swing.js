@@ -1,9 +1,10 @@
-/* Swing review: #/swing (sectors, then their stocks), #/swing/holdings (your holdings against
-   their zones), #/swing/orders (your GTTs, ATOs and alerts) and #/swing/<SYMBOL> (chart, timeline
-   and zones; an index also lists its stocks). Stocks open as sub pages of where you came from:
-   #/swing/<INDEX>/<SYMBOL>, #/swing/holdings/<SYMBOL>, #/swing/orders/<SYMBOL>. Information for your
-   own decisions: it makes no setups and only reads from Kite. The lists come from the last
-   `algo swing scan`; a stock's zones are computed when its page opens. */
+/* Swing section (its own sub-menu, like Backtests). This file: #/swing (Sectors: sectors, then
+   their stocks), #/swing/holdings (your holdings against their zones), #/swing/orders (your GTTs,
+   ATOs and alerts) and #/swing/<SYMBOL> (chart, timeline and zones; an index also lists its stocks).
+   Stocks open as sub pages of where you came from: #/swing/<INDEX>/<SYMBOL>, #/swing/holdings/<SYMBOL>,
+   #/swing/orders/<SYMBOL>. The workflow pages are their own files and are reached by lower-case
+   names: run, picks, watch/<id>, journal, settings, fundamentals (swing_*.js). Only reads from Kite.
+   The lists come from the last weekend scan; a stock's zones are computed when its page opens. */
 
 (() => {
   const POSITIONS = ['near support', 'near resistance', 'in a zone', 'mid-range'];
@@ -28,11 +29,6 @@
   let ordersCache = null;
   let renderId = 0;                      // async results for a page already left are dropped
 
-  const tabs = (active) => `<nav class="tabs" aria-label="Swing sections">${
-    [['list', '#/swing', 'fa-layer-group', 'Sectors and stocks'], ['holdings', '#/swing/holdings', 'fa-briefcase', 'Holdings'],
-      ['orders', '#/swing/orders', 'fa-bell', 'Orders']]
-      .map(([k, href, icon, label]) => `<a class="tab${k === active ? ' active' : ''}" href="${href}"><i class="fa-solid ${icon}"></i>${label}</a>`).join('')}
-  </nav>`;
 
   async function getOrders(force = false) {
     if (!force && ordersCache && Date.now() - ordersCache.at < ORDERS_MAX_AGE_MS) return ordersCache.data;
@@ -49,7 +45,7 @@
   const crumbs = (...items) => `<nav class="sw-crumbs" aria-label="Breadcrumb">${items.map(([label, href], i) => (
     i === items.length - 1 ? `<span aria-current="page">${App.esc(label)}</span>`
       : `<a href="${href}">${App.esc(label)}</a><i class="fa-solid fa-chevron-right"></i>`)).join('')}</nav>`;
-  const HOME = ['Swing review', '#/swing'];
+  const HOME = ['Swing', '#/swing'];
   const zoneKey = (z) => (z.flipped ? 'flipped' : z.role);
   const zoneName = (z) => (z.flipped ? `flipped ${z.role}` : z.role);
 
@@ -129,14 +125,14 @@
     table.querySelector('thead').innerHTML = header(STOCK_COLS, list.stockSort);
     table.querySelector('tbody').innerHTML = sorted(rows, list.stockSort).map((r) => `
       <tr data-symbol="${App.esc(r.symbol)}">
-        <td><a href="${link(r.symbol)}">${App.esc(r.symbol)}</a></td><td class="sw-left muted">${App.esc(r.industry)}</td>
+        <td><a href="${link(r.symbol)}">${App.esc(r.symbol)}</a>${App.swingWatch.addButton(r.symbol)}</td><td class="sw-left muted">${App.esc(r.industry)}</td>
         <td>${App.num(r.close)}</td><td>${change(r.week_pct)}</td><td>${change(r.month_pct)}</td>
         <td class="sw-left">${position(r.position)}</td><td>${range(r.support)}</td><td>${atr(r.support_atr)}</td>
         <td>${range(r.resistance)}</td><td>${atr(r.resistance_atr)}</td><td>${App.num(r.traded_cr, 0)}</td>
       </tr>`).join('');
     bindSort(table, 'stockSort', drawStocks);
     table.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', (e) => {
-      if (!e.target.closest('a')) location.hash = link(tr.dataset.symbol);
+      if (!e.target.closest('a, button')) location.hash = link(tr.dataset.symbol);
     }));
   }
 
@@ -145,18 +141,18 @@
     data = await App.api('swing/overview');
     if (!data.available) {
       el.innerHTML = App.emptyState('fa-layer-group', 'No scan yet',
-        'Run <code>algo swing scan</code> after <code>algo login</code>. It needs no market hours.');
+        'Start one from Weekend run (it needs no market hours).', '<a class="btn-primary" href="#/swing/run"><i class="fa-solid fa-play"></i>Weekend run</a>');
       return;
     }
     const count = (rows, p) => rows.filter((r) => r.position === p).length;
     el.innerHTML = `
-      ${crumbs(['Swing review'])}
+      ${crumbs(HOME, ['Sectors'])}
       <div class="page-header">
-        <div><div class="page-title"><i class="fa-solid fa-layer-group"></i>Swing review</div>
+        <div><div class="page-title"><i class="fa-solid fa-industry"></i>Sectors</div>
           <div class="page-subtitle">Where each sector and stock sits against its support and resistance zones</div></div>
         <div class="header-meta">Candles to ${App.prettyDate(data.candles_to)}</div>
       </div>
-      ${tabs('list')}
+      
       <p class="sw-note"><i class="fa-solid fa-circle-info"></i>${App.esc(data.note)}</p>
       <div class="kpi-strip">
         ${App.kpi('Sectors near support', count(data.sectors, 'near support'), '', 'fa-arrow-down', 'tone-green', `of ${data.sectors.length} indices`)}
@@ -213,7 +209,7 @@
       </tr>`).join('');
     bindSort(table, 'heldSort', drawHeld);
     table.querySelectorAll('tbody tr[data-symbol]').forEach((tr) => tr.addEventListener('click', (e) => {
-      if (!e.target.closest('a')) location.hash = link(tr.dataset.symbol, HOLDINGS);
+      if (!e.target.closest('a, button')) location.hash = link(tr.dataset.symbol, HOLDINGS);
     }));
   }
 
@@ -221,10 +217,10 @@
     el.innerHTML = '<div class="section-card"><div class="skeleton" style="height:160px"></div></div>';
     held = await App.api('swing/holdings');
     const head = `${crumbs(HOME, ['Holdings'])}<div class="page-header">
-        <div><div class="page-title"><i class="fa-solid fa-layer-group"></i>Swing review</div>
+        <div><div class="page-title"><i class="fa-solid fa-briefcase"></i>Holdings</div>
           <div class="page-subtitle">Your holdings against their support and resistance zones</div></div>
         ${held.available ? `<div class="header-meta">Read from Kite ${App.esc(held.fetched_at.slice(0, 16).replace('T', ' '))}</div>` : ''}
-      </div>${tabs('holdings')}`;
+      </div>`;
     if (!held.available) {
       el.innerHTML = head + App.emptyState('fa-briefcase', 'Holdings not read yet',
         'Run <code>algo swing holdings</code> after <code>algo login</code>, or <code>algo swing scan</code>, which does it too.');
@@ -280,11 +276,11 @@
     const out = await getOrders(force);
     if (token !== renderId) return;
     const head = `${crumbs(HOME, ['Orders'])}<div class="page-header">
-        <div><div class="page-title"><i class="fa-solid fa-layer-group"></i>Swing review</div>
+        <div><div class="page-title"><i class="fa-solid fa-bell"></i>Orders on Kite</div>
           <div class="page-subtitle">Your GTTs, ATOs and alerts on Kite. Read-only: manage them in Kite</div></div>
         <div class="header-meta">${out.as_of ? `Read from Kite at ${App.timeOf(out.as_of)}` : ''}
           <button class="btn-secondary" id="sw-orders-refresh"><i class="fa-solid fa-rotate"></i>Refresh</button></div>
-      </div>${tabs('orders')}`;
+      </div>`;
     if (!out.available) {
       el.innerHTML = head + App.emptyState('fa-bell', 'Not connected to Kite', `${App.esc(out.reason)} Your orders aren't stored, so this page needs a login.`);
     } else {
@@ -331,7 +327,7 @@
       </div>
       ${rows.length ? `<div class="table-wrap"><table class="data-table clickable" id="sw-member-table"><thead>${header(MEMBER_COLS, list.memberSort)}</thead>
       <tbody>${ordered.map((r) => `<tr data-symbol="${App.esc(r.symbol)}">
-        <td><a href="${link(r.symbol, link(members.index))}">${App.esc(r.symbol)}</a></td><td class="sw-left muted">${App.esc(r.industry)}</td>
+        <td><a href="${link(r.symbol, link(members.index))}">${App.esc(r.symbol)}</a>${App.swingWatch.addButton(r.symbol)}</td><td class="sw-left muted">${App.esc(r.industry)}</td>
         <td>${App.num(r.price)}</td><td>${change(r.change_pct)}</td><td class="sw-left">${position(r.position)}</td>
         <td class="sw-left">${range(r.zone)}</td><td>${range(r.support)}</td><td>${atr(r.support_atr)}</td><td>${range(r.resistance)}</td><td>${atr(r.resistance_atr)}</td>
       </tr>`).join('')}</tbody></table></div>` : '<p class="muted sw-pad">No stocks in this position.</p>'}`;
@@ -340,7 +336,7 @@
     if (!table) return;
     bindSort(table, 'memberSort', drawMembers);
     table.querySelectorAll('tbody tr').forEach((tr) => tr.addEventListener('click', (e) => {
-      if (!e.target.closest('a')) location.hash = link(tr.dataset.symbol, link(members.index));
+      if (!e.target.closest('a, button')) location.hash = link(tr.dataset.symbol, link(members.index));
     }));
   }
 
@@ -552,7 +548,7 @@
       <div class="page-header">
         <div><div class="page-title">${App.esc(s.symbol)}</div>
           <div class="page-subtitle">${facts}</div></div>
-        <div class="sw-price"><div class="sw-close">${App.num(s.close)}</div>
+        <div class="sw-price"><div class="sw-close">${App.num(s.close)} ${App.swingWatch.addButton(s.symbol, true)}</div>
           <div>${change(s.week_pct)} week · ${change(s.month_pct)} month · ATR ${App.num(s.atr)}</div>
           <div>${s.position ? position(s.position) : ''} · candles to ${App.prettyDate(s.candles_to)}</div></div>
       </div>
@@ -577,6 +573,7 @@
       </div>
       ${s.is_index ? '<div class="section-card" id="sw-members"><div class="skeleton" style="height:120px"></div></div>'
         : '<div class="section-card" id="sw-timeline"></div>'}
+      ${!s.is_index ? App.swingWatch.fundamentalsCard(s.fundamentals) : ''}
       ${s.zones.length ? `<div class="section-card">
         <div class="section-title sw-gap">Zones</div>
         <div class="table-wrap"><table class="data-table"><thead><tr><th>Zone</th><th class="sw-left">Role</th><th>Held as support</th>
@@ -604,18 +601,29 @@
     if (s.is_index) loadMembers(s.symbol, token);
   }
 
+  // The workflow pages, by their lower-case route names (index and stock names are upper case).
+  const VIEWS = {
+    run: ['Weekend run', () => App.swingRun], picks: ['Picks', () => App.swingPicks], watch: ['Watchlist', () => App.swingWatch],
+    journal: ['Picks journal', () => App.swingJournal], settings: ['Settings', () => App.swingSettings],
+    fundamentals: ['Fundamentals data', () => App.swingSettings.fundamentals],
+  };
   const TITLES = { holdings: 'Holdings · Swing', orders: 'Orders · Swing' };
+  let view = null;
   App.page('swing', {
-    title: (args) => (args[1] ? `${args[1]} · Swing` : TITLES[args[0]] || (args[0] ? `${args[0]} · Swing` : 'Swing review')),
-    render: (el, args) => {
+    title: (args) => (VIEWS[args[0]] ? `${VIEWS[args[0]][0]} · Swing`
+      : args[1] ? `${args[1]} · Swing` : TITLES[args[0]] || (args[0] ? `${args[0]} · Swing` : 'Sectors · Swing')),
+    render: (el, args, query) => {
       renderId += 1;
       members = null;
+      view = null;
+      App.swingWatch.loadNav();
       const [first, second] = args;
+      if (VIEWS[first]) { view = VIEWS[first][1](); return view.render(el, args.slice(1), query); }
       if (first === 'holdings') return second ? renderStock(el, second, { parent: ['Holdings', HOLDINGS] }) : renderHoldings(el);
       if (first === 'orders') return second ? renderStock(el, second, { parent: ['Orders', ORDERS] }) : renderOrders(el);
       if (second) return renderStock(el, second, { parent: [first, link(first)] });
       return first ? renderStock(el, first) : renderList(el);
     },
-    destroy: () => { stopTimers(); removeChart(); },
+    destroy: () => { stopTimers(); removeChart(); view?.destroy?.(); view = null; },
   });
 })();

@@ -3,6 +3,11 @@
 Once P&L has reached ``arm_rupees``, exit if it falls ``give_rupees`` below its peak. Until then it
 does nothing, so the normal swings of a young trade can't set it off. Holds the peak, so build a
 fresh rule for every trade (BaseAlgo rebuilds the rules per trade).
+
+In a backtest on 1-minute candles the rule also walks the minute that just finished (open, the
+index's two extremes, close; ``RiskContext.minute_path``), so a peak or a give-back inside a
+minute counts as it would live. The exit itself then fills at that minute's
+close, the first price the backtest has after the candle is known.
 """
 
 from __future__ import annotations
@@ -21,8 +26,11 @@ class ProfitTrail(ExitRule):
         mark = ctx.mark
         if mark is None or not mark.complete:
             return None
-        pnl = mark.net_pnl if self.basis == "net" else mark.gross_pnl
-        self.peak = pnl if self.peak is None else max(self.peak, pnl)
-        if self.peak >= self.arm and pnl <= self.peak - self.give:
-            return f"{self.basis} P&L {pnl:.2f} fell {self.give:.0f} below its peak {self.peak:.2f}"
+        points = [(m, True) for m in (ctx.minute_path or []) if m.complete] + [(mark, False)]
+        for m, inside in points:
+            pnl = m.net_pnl if self.basis == "net" else m.gross_pnl
+            self.peak = pnl if self.peak is None else max(self.peak, pnl)
+            if self.peak >= self.arm and pnl <= self.peak - self.give:
+                where = " inside the last minute" if inside else ""
+                return f"{self.basis} P&L {pnl:.2f} fell {self.give:.0f} below its peak {self.peak:.2f}{where}"
         return None

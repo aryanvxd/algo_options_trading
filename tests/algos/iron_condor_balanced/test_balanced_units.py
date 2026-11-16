@@ -93,6 +93,34 @@ def test_trail_ignores_an_incomplete_mark_and_can_use_net_pnl():
     assert net.check(trail_ctx(600)) is not None          # net 400 <= 800 - 390
 
 
+def path_ctx(pnl, path):
+    ctx = trail_ctx(pnl)
+    ctx.minute_path = [SimpleNamespace(gross_pnl=p, net_pnl=p - 200, complete=True) for p in path]
+    return ctx
+
+
+def test_trail_sees_a_peak_and_give_back_inside_the_minute():
+    # 13 Nov 2026: live peaked at +845 and gave back to 455 between minute closes of ~700 and ~630.
+    rule = ProfitTrail(780, 390, "gross")
+    assert rule.check(trail_ctx(702)) is None
+    assert rule.check(path_ctx(630, [702, 845, 450, 630])) == \
+        "gross P&L 450.00 fell 390 below its peak 845.00 inside the last minute"
+
+
+def test_trail_peak_inside_the_minute_arms_it_for_later():
+    rule = ProfitTrail(780, 390, "gross")
+    assert rule.check(path_ctx(700, [650, 600, 845, 700])) is None   # dip came before the peak
+    assert rule.peak == 845
+    assert rule.check(trail_ctx(455)) is not None                     # 455 <= 845 - 390
+
+
+def test_trail_ignores_incomplete_path_marks():
+    rule = ProfitTrail(780, 390, "gross")
+    ctx = path_ctx(500, [900])
+    ctx.minute_path[0].complete = False
+    assert rule.check(ctx) is None and rule.peak == 500
+
+
 def test_trail_table_is_off_on_0_and_1_dte():
     _, cfg = registry.load("iron_condor_balanced")
     assert [cfg.trail_for(d) for d in range(5)] == [(0, 0), (0, 0), (6, 3), (6, 3), (6, 3)]

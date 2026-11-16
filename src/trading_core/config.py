@@ -146,6 +146,17 @@ def load_model(path: Path, model: type[T], overrides: dict[str, Any] | None = No
     return model.model_validate(data)
 
 
+def int_keys(data: Any) -> Any:
+    """JSON object keys are always strings; config tables keyed by DTE use integers in YAML. Turn keys
+    made only of digits back into integers, so ``{"2": 12}`` replaces ``{2: 15}`` in ``deep_merge``
+    instead of sitting beside it."""
+    if isinstance(data, dict):
+        return {(int(k) if isinstance(k, str) and k.isdigit() else k): int_keys(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [int_keys(v) for v in data]
+    return data
+
+
 def deep_merge(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
     out = dict(base)
     for k, v in extra.items():

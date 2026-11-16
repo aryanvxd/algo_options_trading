@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from dashboard import queries
 from dashboard.app import create_app
+from dashboard.strategy_queries import strategy_day
 from tests.helpers import seed_day
 from trading_core.clock import IST, SimClock, ist
 from trading_core.db.repo import Journal
@@ -64,6 +65,11 @@ def test_open_position_uses_live_state(db):
     s = ov["strategies"][0]
     assert s["open_positions"] == 1 and s["gross"] == 65.0 and s["net"] == 16.0 and s["charges"] == 49.0
     assert ov["totals"]["open_net"] == 16.0 and ov["totals"]["running"] == 1
+
+    # The strategy page's Today view shows the same charges while the trade is open (the position
+    # row only gets its charges at close).
+    t = strategy_day(db, "iron_condor", DAY, "all", "live")["trades"][0]
+    assert t["open"] and t["gross"] == 65.0 and t["net"] == 16.0 and t["charges"] == 49.0
 
 
 def test_http_endpoints(db, replayed):

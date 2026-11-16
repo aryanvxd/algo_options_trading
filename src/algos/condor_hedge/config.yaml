@@ -1,0 +1,57 @@
+# NIFTY condor move hedge — every tunable number lives here.
+# Spec: docs/strategy-criteria/condor-hedge.md. Times are IST and must be quoted ("09:45").
+# Starting values from the 10-day real-candle study of 11 Nov 2026 (data/backtests/buyside/): a
+# first guess from 10 trending days, not a tuned result.
+
+algo_id: condor_hedge
+name: NIFTY Condor Move Hedge
+version: "0.1.0"
+description: Buy an OTM option in the direction NIFTY runs away from where the balanced condor was sold; trail on NIFTY.
+mode: paper            # live is disabled in v1
+lots: 1
+capital: 15000         # bucket: 1 lot of a ~₹100-200 option plus a buffer
+trade_weekdays: [Mon, Tue, Wed, Thu, Fri]
+
+max_trades: 1
+reentry_cooldown_s: 120
+tick_snapshot_interval_s: 5
+position_snapshot_interval_s: 5
+
+underlying: NIFTY
+index_symbol: "NIFTY 50"
+vix_symbol: "INDIA VIX"
+
+anchor:
+  source: condor               # NIFTY at iron_condor_balanced's entry (backtests use the 09:49 close)
+  algo: iron_condor_balanced
+  time: "09:49"
+  wait_until: "10:30"          # the condor's own entry deadline: no condor, nothing to hedge
+
+trigger:
+  move_pts: 80                 # NIFTY 80 pts from the anchor ...
+  confirm_bars: 1              # ... on one 1-minute close
+
+option:
+  strike_step: 50
+  otm_strikes: 2               # two strikes out of the money in the move's direction
+  premium_min: 5
+  max_spread_pts: 1.0
+  max_quote_age_s: 5
+  subscribe_range_pts: 600
+  resubscribe_drift_pts: 200
+
+exits:
+  trail_pts: 80                # NIFTY gives back 80 pts from its best 1-minute close since entry
+  premium_stop_pct: 30         # or the option is 30% below its entry price
+  stale_feed_seconds: 10
+
+limits:
+  max_day_loss: 3000
+
+schedule:
+  day_check: "08:15"
+  start_feed: "09:15"
+  entry: "10:00"
+  entry_deadline: "14:45"
+  square_off: "15:15"
+  report: "15:20"

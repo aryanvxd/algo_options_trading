@@ -10,7 +10,13 @@
 - **What it isn't:** a signal. "Near support" says where price is against past turning points, not
   that it will bounce (9a). The tool shows information, not recommendations.
 - **Built as its own section** of the platform, `src/swing/`. The intraday `BaseAlgo` runner doesn't
-  fit a scan that runs once a week over many stocks. It needs no database tables.
+  fit a scan that runs once a week over many stocks.
+- **9 Nov 2026: a weekend workflow on the dashboard** (section 8a, R5). You asked for entry and exit
+  plans again, run from the dashboard: sectors at support → their stocks at support → a plan for
+  each, ranked mostly on technicals with a small weight for news and fundamentals, five
+  watchlists. Built as **plans plus forward tracking**: every top pick is journalled next to a
+  random twin, so your own results show whether the ranking beats chance. Still nothing writes to
+  Kite. Its watchlists, journal and fundamentals use database tables (migration 0006).
 
 ## 1. Idea
 
@@ -324,6 +330,31 @@ dashboard only reads that file. Your holdings are personal data: they stay in th
 `data/` folder and on this local dashboard, never in code, docs or tests. Quantity = settled +
 T+1 + pledged shares.
 
+## 8a. The weekend workflow (R5, 9 Nov 2026)
+
+The Swing sidebar entry opens its own sub-menu, like Backtests:
+
+| Group | Page | What |
+|---|---|---|
+| Weekend workflow | **Weekend run** `#/swing/run` | starts `algo swing scan` in the background (any day; Refresh from Kite optional; asks first in market hours) and shows its five stages live from `data/reports/swing/scan_status.json`, with the log |
+| | **Sectors** `#/swing` | the overview (section 8) |
+| | **Picks** `#/swing/picks` | the funnel from `picks.json`: (1) sectors, an index passes when it is in a zone or within `funnel.sector_near_atr` ATR above a support and its trend is up, with RSI and relative strength against NIFTY 50; (2) the liquid members of passing sectors with a plan from `setups.find_setup`, stop `funnel.stop_atr` (1 ATR) under the zone; (3) a score: 75% technicals, 10% news, 15% fundamentals |
+| Watchlists | **Algo picks** + 4 of yours `#/swing/watch/<id>` | Algo picks is replaced by each scan with its top `funnel.top_n` (at most 3 per industry) and their levels; yours can be renamed and filled with the star button on any stock. Live prices every 30 s when logged in |
+| Tracking | **Picks journal** `#/swing/journal` | every top pick and its random twin (9b's baseline), walked forward with `setup_backtest.simulate`: pending, open, target, stop, time, expired. Fill rate, win rate and average return, picks against twins |
+| Portfolio | Holdings, Orders | section 8 |
+| Setup | **Settings** `#/swing/settings` | the stage rules, saved to `data/swing/overrides.json` over `config.yaml` (`load_user_config`) |
+| | **Fundamentals data** `#/swing/fundamentals` | upload a CSV (e.g. a Screener export); each column becomes a metric key (`ROCE %` → `roce`). Feeds the fundamentals rules and a card on the stock page |
+
+- **News** = the market calendar only: results inside `funnel.news_days` lower the score and are
+  flagged; High-impact Indian macro events in the next `funnel.macro_days` are flagged on every pick.
+- **The score is a ranking aid, not an edge** (9a, 9b). The journal is how to find out otherwise.
+- Code: `src/swing/funnel.py`, `tracking.py`, `watchlists.py`, `fundamentals.py`, `progress.py`;
+  `src/dashboard/swing_jobs.py`, `swing_workflow.py`; pages `swing_run.js`, `swing_picks.js`,
+  `swing_watch.js`, `swing_journal.js`, `swing_settings.js`.
+- Tables (migration 0006): `watchlists`, `watchlist_items`, `swing_picks`, `fundamentals`.
+- The benchmark's daily candles (NIFTY 50, key `swing_benchmark`) download with the next scan that
+  refreshes from Kite; until then relative strength is blank.
+
 ## 9. Testing the idea before money
 
 | Test | How |
@@ -447,7 +478,9 @@ stocks. **You decided on 6 Nov 2026 to keep it as a review tool** (top of this f
 
 | Step | What |
 |---|---|
-| R4 | Fundamentals page, once its data source is settled |
+| R4 | Fundamentals from an automatic source (the CSV upload of R5 is the slot it fills) |
+
+**Done 9 Nov 2026:** R5, the weekend workflow (section 8a).
 
 **Dropped:** the weekend approval report, trades and alerts pages, Kite alerts/ATOs/GTTs (old W6),
 and the order-book recorder (old W7).
@@ -477,6 +510,15 @@ Rows 2–5, 7 and 8 belong to the parked setups (section 5).
 | # | Question | Your answer |
 |---|---|---|
 | 11 | After the backtests (9a, 9b) | **Keep it as a review tool**: zones, charts, sector overview and holdings review for your own decisions; no automated entries |
+
+### Answered, 9 Nov 2026
+
+| # | Question | Your answer |
+|---|---|---|
+| 12 | Entry and exit levels, after 9a and 9b | **Plans plus forward tracking**: show them, journal every pick against a random twin, keep the "no edge" note |
+| 13 | Fundamentals source | **A CSV you upload** for now; an automatic source later |
+| 14 | News | **Market calendar events only** (results and High-impact macro dates) |
+| 15 | Algo picks watchlist | **Replaced by each scan**; the journal keeps the history |
 
 ### Still open
 

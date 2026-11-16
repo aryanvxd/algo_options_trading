@@ -121,6 +121,19 @@ def test_falling_day_with_rich_puts_buys_puts(platform, db):
     assert first.legs[0].tradingsymbol.endswith("PE") and first.net_pnl > 0
 
 
+def test_index_falling_against_rising_breadth_needs_require_breadth_off(platform, db):
+    # 11 Nov 2026's shape: heavyweights drag NIFTY down while most stocks are up (breadth bullish).
+    seed(db, platform, trend(-1), lambda mins: 0.6)
+    replay(platform, db)
+    assert positions(db) == []                                        # default: breadth must agree
+
+    price_only = {"bias": {"require_breadth": False, "w_breadth": 0.0, "w_skew": 0.0, "w_vwap": 1.0}}
+    replay(platform, db, price_only)
+    first = positions(db)[0]
+    assert first.params["side"] == "PE" and first.params["bias"]["b1"] == 1.0   # breadth said up
+    assert first.params["bias"]["b3"] < 0 and first.net_pnl > 0
+
+
 def test_flat_day_never_triggers_even_with_a_bullish_bias(platform, db):
     seed(db, platform, lambda mins: 25000 + 4 * math.sin(mins / 3), lambda mins: 0.6)
     run_id = replay(platform, db)
